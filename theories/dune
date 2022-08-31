@@ -1,4 +1,4 @@
 (coq.theory
  (name CakeMLExtraction)
- (package coq-cakeml-extraction)
- (libraries coq-cakeml-extraction.plugin))
+ (package coq2cakeml)
+ (libraries coq2cakeml.plugin))

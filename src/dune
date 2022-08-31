@@ -1,6 +1,6 @@
 (library
- (name cakeml_extraction)
- (public_name coq-cakeml-extraction.plugin)
+ (name coq2cakeml)
+ (public_name coq2cakeml.plugin)
  (synopsis "Proof producing CakeML extraction")
  (flags :standard -rectypes -w -27)
  (libraries coq-core.vernac coq-core.lib coq-core.kernel))

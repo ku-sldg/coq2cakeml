@@ -7,7 +7,7 @@ Require Import List.
 Import ListNotations.
 
 Add ML Path  "../_build/default/src".
-Declare ML Module "cakeml_extraction".
+Declare ML Module "coq2cakeml".
 
 Definition nat_test_O : nat := O.
 Eval cbv in "Test 1: 0 parameter constructor".
