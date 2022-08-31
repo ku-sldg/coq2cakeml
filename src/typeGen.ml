@@ -1,0 +1,38 @@
+(* Functions that generate Coq types *)
+
+open Util
+open Constr
+
+(* Smartlocate uses the names in the current environment. *)
+(* So if for examples CakeAST has been imported then the qualified id wouldn't *)
+(* necessarily need to be a full path. This raises the question of whether its *)
+(* better to require full paths at all times in this source code or to instead *)
+(* import the necessary modules before these functions get called from Coq. *)
+let get_type module_name type_name =
+  let type_qualid = Libnames.qualid_of_string (if module_name != ""
+                                               then (String.concat "." [module_name; type_name])
+                                               else type_name)
+  in
+  let typ = Smartlocate.global_inductive_with_alias type_qualid in
+  mkInd typ
+
+let coq_init_mod = "Coq.Init.Datatypes"
+
+let string_type = get_type "Strings.String" "string"
+
+let prod_type a_type b_type = mkApp (get_type coq_init_mod "prod",
+                                     [| a_type; b_type |])
+
+let list_type a_type = mkApp (get_type coq_init_mod "list",
+                              [| a_type |])
+
+let cake_ast_mod = "CakeSem.CakeAST"
+let exp_type   = get_type cake_ast_mod "exp"
+let pat_type   = get_type cake_ast_mod "pat"
+let ast_t_type = get_type cake_ast_mod "ast_t"
+
+let cake_namespace_mod = "CakeSem.Namespace"
+let ident_type long_type short_type = mkApp (get_type cake_namespace_mod "ident",
+                                             [| long_type; short_type|])
+
+let ident_str_type = ident_type string_type string_type
