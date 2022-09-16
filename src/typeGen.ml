@@ -18,6 +18,8 @@ let get_type module_name type_name =
 
 let coq_init_mod = "Coq.Init.Datatypes"
 
+let nat_type = get_type coq_init_mod "nat"
+
 let string_type = get_type "Strings.String" "string"
 
 let prod_type a_type b_type = mkApp (get_type coq_init_mod "prod",

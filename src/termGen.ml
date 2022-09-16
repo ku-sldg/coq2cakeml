@@ -28,10 +28,11 @@ let get_opn_constr cname = get_constructor "CakeAST" "opn" cname
 
 let get_op_constr cname = get_constructor "CakeAST" "op" cname
 
-
 let get_pat_constr cname = get_constructor "CakeAST" "pat" cname
 
 let get_ast_t_constr cname = get_constructor "CakeAST" "ast_t" cname
+
+let get_dec_cons cname = get_constructor "CakeAST" "dec" cname
 
 let char_to_coq_ascii char =
   let ascii_const = get_constructor "Strings.Ascii" "ascii" "Ascii" in

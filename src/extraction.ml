@@ -43,8 +43,8 @@ let rec extract_term env c =
   | Evar _ -> assert false
   | Sort _ -> assert false
 
-  | Cast _ -> get_exp_constr "ERaise"
-  | Prod (a,b,c) -> get_exp_constr "ERaise"
+  | Cast _ -> assert false
+  | Prod (a,b,c) -> assert false
 
   | Lambda (name,typ,body) ->
     let env' = Environ.push_rel (LocalAssum (name,typ)) env in
@@ -52,7 +52,7 @@ let rec extract_term env c =
     else let name_str = name_to_str name in
       mkApp (get_exp_constr "EFun", [| str_to_coq_str name_str; extract_term env' body |])
 
-  | LetIn  (name,term,ty,body) ->
+  | LetIn (name,term,ty,body) ->
     let open Names in
     let env' = Environ.push_rel (LocalDef (name,term,ty)) env in
     let name_op =
@@ -107,7 +107,7 @@ let rec extract_term env c =
       let cons_types = List.map (fun typ -> Reduction.hnf_prod_applist env typ params
                        |> Term.decompose_prod
                        |> fst)
-cons_types in
+          cons_types in
       let cons_types = List.map (fun name_type_list ->
           List.map (fun (name,typ) -> Context.Rel.Declaration.LocalAssum(name,typ)) name_type_list)
           cons_types in
@@ -124,9 +124,7 @@ cons_types in
         pair_to_coq_pair x pat_type exp_type)
         pat_br_lst
     in
-
     let coq_pat_exp_list = list_to_coq_list pat_br_lst (prod_type pat_type exp_type) in
-
     let discriminee = extract_term env c in
 
     mkApp (get_exp_constr "EMat", [| discriminee; coq_pat_exp_list |])
@@ -149,29 +147,22 @@ cons_types in
             let env'' = Environ.push_rel (LocalAssum (name,typ)) env' in
             (str_to_coq_str (name_to_str name), extract_term env'' body)
           | _ -> assert false)
-          bodies
-      in
-
+          bodies in
       let name_var_bodies = List.map (fun (f,(v,b)) ->
           pair_to_coq_pair (pair_to_coq_pair (str_to_coq_str f,v) string_type string_type, b)
             (prod_type string_type string_type) exp_type)
-          (List.combine func_names func_var_bodies)
-      in
-
+          (List.combine func_names func_var_bodies) in
       let nvb_coq =
-        list_to_coq_list  name_var_bodies (prod_type (prod_type string_type string_type) exp_type)
-      in
-
+        list_to_coq_list  name_var_bodies (prod_type (prod_type string_type string_type) exp_type) in
       let in_var = mkApp (get_exp_constr "EVar", [| ident_of_str (List.nth func_names i)|]) in
 
       mkApp (get_exp_constr "ELetrec", [| nvb_coq; in_var |])
 
-  | Proj (n,b)            -> get_exp_constr "EApp"
-
-  | CoFix _     -> get_exp_constr "ERaise"
-  | Int _       -> get_exp_constr "ERaise"
-  | Float _     -> get_exp_constr "ERaise"
-  | Array _     -> get_exp_constr "ERaise"
+  | Proj (n,b) -> assert false
+  | CoFix _ -> assert false
+  | Int _   -> assert false
+  | Float _ -> assert false
+  | Array _ -> assert false
 
 and extract_app env c args =
   match Constr.kind c with
@@ -187,34 +178,10 @@ and extract_constructor env cons args =
   let is_eq_args =  mut_bdy.mind_nparams + one_bdy.mind_consnrealargs.(ci-1) = Array.length args in
   let cons_type = (Typeops.infer env cons).uj_type in
   if not is_eq_args
-  then (* let eta = (Reduction.eta_expand env cons cons_type) in *)
-    (* redo eta with debugging*)
-    let ctxt, _codom = Reduction.dest_prod env cons_type in
-    print_endline "TYPE_CONTEXT: ";
-    List.iter (print_pt ~env:env) ctxt;
-    let ctxt',t = Reduction.dest_lam env cons in
-    print_endline "VAL_CONTEXT: ";
-    List.iter (print_pt ~env:env) ctxt';
-    print_string "VAL: : ";
-    print_constr ~env:env t;
-    let d = Context.Rel.nhyps ctxt - Context.Rel.nhyps ctxt' in
-    let eta_args = List.rev_map Constr.mkRel (Util.List.interval 1 d) in
-    print_endline "ARGS: ";
-    List.iter  print_constr eta_args;
-    let t = Term.applistc (Constr.lift d t) eta_args in
-    print_string "LIFTED VAL: : ";
-    print_constr ~env:env t;
-    let t = Term.it_mkLambda_or_LetIn t (Util.List.firstn d ctxt) in
-    print_string "LAMBDA'D VAL: : ";
-    print_constr ~env:env t;
-    let eta = Term.it_mkLambda_or_LetIn t ctxt' in
-    print_string "ADD BACK VAL CONTEXT: ";
-    print_constr ~env:env t;
-    let beta = Reduction.beta_appvect eta args in
-
-    extract_term env (Constr.mkApp (beta,args))
+  then let eta = (Reduction.eta_expand env cons cons_type) in
+       let beta = Reduction.beta_appvect eta args in
+       extract_term env (Constr.mkApp (beta,args))
   else
-
   (* filter out any argument that is a type *)
 
   let name_str = Names.Id.to_string mut_bdy.mind_packets.(ti).mind_consnames.(ci-1) in
@@ -236,11 +203,14 @@ and opapp_app_list env constr_list =
              [| get_op_constr "Opapp"; list_to_coq_list [opapp_helper env l ; extract_term env x] exp_type |])
     | _ -> assert false
   in
-  opapp_helper env (List.rev constr_list)
+  let types_removed_list = (List.hd constr_list) :: List.filter (fun term -> term |> is_type env |> not) (List.tl constr_list) in
+  (* match types_removed_list with *)
+  (* | [term] -> extract_term env term *)
+  (* | _ -> *) opapp_helper env (List.rev types_removed_list)
 
 (* Currently this will make the type incorrect if: *)
 (* - there is another parameter with the same name that already starts with a lowercase *)
-(* - there is invalid chars in the parameter (idk what these are r.n.) *)
+(* - there are invalid chars in the parameter (idk what these are r.n.) *)
 let fix_name str =
   let exploded_str = String.explode str in
   let lowercase_str = (List.hd exploded_str |> String.lowercase_ascii) :: (List.tl exploded_str) in
@@ -333,20 +303,55 @@ let extract_inductive env (mut_body : Declarations.mutual_inductive_body) =
                                     (prod_type (list_type string_type) string_type)
                                     (list_type (prod_type string_type (list_type ast_t_type))))
 
+let locs = list_to_coq_list [] nat_type
+
+let extract_inductive_declaration env mut_body =
+  mkApp (get_dec_cons "Dtype", [| locs; extract_inductive env mut_body |])
+
+let extract_var_declaration env name term =
+  let def_name = mkApp (get_pat_constr "Pvar", [| name |> Names.Constant.to_string |> str_to_coq_str |]) in
+  mkApp (get_dec_cons "Dlet", [| def_name; extract_term env term |])
+
+let rec extract_function_declaration env func_name lambda =
+  match kind lambda with
+  | Lambda (var_name,typ,body) ->
+    let env' = Environ.push_rel (LocalAssum (var_name,typ)) env in
+
+    if Reductionops.is_sort env Evd.empty (EConstr.of_constr typ) || Reduction.is_arity env typ
+    then extract_function_declaration env' func_name body
+    else
+      let f_v_name_pair = pair_to_coq_pair (func_name |> Names.Constant.to_string |> str_to_coq_str,
+                                            var_name |> name_to_str |> str_to_coq_str)
+                                            string_type string_type in
+      let trip = pair_to_coq_pair (f_v_name_pair, extract_term env' body)
+                                  (prod_type string_type string_type)
+                                  (exp_type) in
+      let trip_list = list_to_coq_list [trip] (prod_type (prod_type string_type string_type) exp_type) in
+
+      mkApp (get_dec_cons "Dletrec", [| locs; trip_list |])
+
+  | _ -> extract_var_declaration env func_name lambda
+
+let extract_declaration env const_name const_body =
+  let open Declarations in
+  match const_body with
+  | Def const -> extract_function_declaration env const_name const
+  | _ -> assert false
+
 let simple_extraction r =
   let glob_ref = locate_global_ref r in
+  let global_env = Global.env () in
   match glob_ref with
   | ConstRef const_name ->
-    let const_body = Environ.lookup_constant const_name (Global.env ()) in
+    let const_body = Environ.lookup_constant const_name global_env in
     begin match const_body.const_body with
       | Def const ->
-        print_constr (extract_term (Global.env ()) const)
+        print_constr (extract_declaration global_env const_name const_body.const_body)
       | _ -> Feedback.msg_info (Pp.str "not a defined constant")
     end
 
-  | VarRef _ -> Feedback.msg_info (Pp.str "not a constant at all: is a variable")
-  | IndRef (name,_) ->
-    let mut_body = Environ.lookup_mind name (Global.env ()) in
-    print_constr (extract_inductive (Global.env ()) mut_body)
+  | IndRef (name,_) | ConstructRef ((name,_),_) ->
+    let mut_body = Environ.lookup_mind name global_env in
+    print_constr (extract_inductive_declaration global_env mut_body)
 
-  | ConstructRef _ -> Feedback.msg_info (Pp.str "not a constant at all: is a constructor")
+  | VarRef _ -> Feedback.msg_info (Pp.str "not a constant at all: is a variable")
