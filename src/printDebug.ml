@@ -1,11 +1,38 @@
 (* Debugging functions *)
+let rec print_constr_shape c =
+  match Constr.kind c with
+  | Rel _ -> "Rel"
+  | Var _ -> "Var"
+  | Meta _ -> "Meta"
+  | Evar _ -> "Evar"
+  | Sort _ -> "Sort"
+  | Cast _ -> "Cast"
+  | Prod (_,_,c') -> String.concat "" ["!. "; "("; print_constr_shape c'; ")"]
+  | Lambda (_,_,c') -> String.concat "" ["\\. "; "("; print_constr_shape c'; ")"]
+  | LetIn (_,c1,_,c2) -> String.concat "" ["let ("; print_constr_shape c1; ") in ("; print_constr_shape c2; ")" ]
+  | App (hd,args) -> String.concat "" ["("; String.concat " " (List.map print_constr_shape (hd :: Array.to_list args)); ")"]
+  | Case (_,_,_,_,_,c',cs) ->
+    String.concat "" ["case "; print_constr_shape c'; " of " ; Array.map snd cs |> Array.to_list |> List.map print_constr_shape |> String.concat " |->" ]
+  | Const _ -> "Const"
+  | Ind _ -> "Ind"
+  | Construct _ -> "Construct"
+  | Fix ((_,i),(_,_,cs))-> String.concat "" ["f\\. ("; print_constr_shape cs.(i); ")"]
+  | CoFix _ -> "CoFix"
+  | Proj _ -> "Proj"
+  | Int _ | Float _ | Array _ -> "Builtin"
+
 let print_constr ?(debruijn = false) ?(env = Global.env ()) e =
   let sigma = Evd.from_env env in
   let env' = if debruijn then Environ.pop_rel_context (Environ.nb_rel env) env
              else env in
 
-  Feedback.msg_info (Ppconstr.pr_constr_expr env' sigma
-                       (Constrextern.extern_constr env' sigma (EConstr.of_constr e)))
+  (* debuggin sesh*)
+  let ofc = EConstr.of_constr e in
+  let ast = (Constrextern.extern_constr env' sigma ofc) in
+  let msg = Ppconstr.pr_constr_expr env' sigma ast in
+  (* END debuggin sesh*)
+
+  Feedback.msg_info msg
 
 let print_arity arity =
   let open Declarations in
@@ -34,7 +61,7 @@ let print_arity arity =
 
   | TemplateArity b ->
     print_endline "TemplateArity: ";
-    do_thing (sort_of_univ b.template_level);
+    do_thing (b.template_level);
     print_endline ""
 
 let print_unsafe_type env c =

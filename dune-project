@@ -1,5 +1,5 @@
-(lang dune 3.1)
-(using coq 0.2)
+(lang dune 2.9)
+(using coq 0.3)
 (name coq2cakeml)
 (version 0.1)
 

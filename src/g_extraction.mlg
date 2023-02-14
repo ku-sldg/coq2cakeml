@@ -1,12 +1,15 @@
-DECLARE PLUGIN "cakeml_extraction"
+DECLARE PLUGIN "coq2cakeml.plugin"
 
 {
   open Stdarg
   open Extraction
+  open InvGen
 
 }
 
 VERNAC COMMAND EXTEND Extraction CLASSIFIED AS QUERY
 (* Extraction in the Coq toplevel *)
-| [ "Translate" global(x) ] -> { simple_extraction x }
+| [ "Translate" global(x) ] -> { translate_and_print x }
+| [ "TranslateDefine" global(x) ] -> { translate_and_add_to_global_environment x }
+| [ "GenerateInvariant" global(x) ] -> { generate_refinement_invariant x }
 END
