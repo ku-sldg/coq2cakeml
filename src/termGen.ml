@@ -1,5 +1,5 @@
 open Util
-open Constr
+open EConstr
 open TypeGen
 
 let get_constructor module_name type_name constructor_name =

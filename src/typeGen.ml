@@ -1,7 +1,7 @@
 (* Functions that generate Coq types *)
 
 open Util
-open Constr
+open EConstr
 
 (* Smartlocate uses the names in the current environment. *)
 (* So if for examples CakeAST has been imported then the qualified id wouldn't *)

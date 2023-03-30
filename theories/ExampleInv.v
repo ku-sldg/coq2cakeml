@@ -307,7 +307,7 @@ Proof.
       * reflexivity.
       * unfold nsLookup; reflexivity.
       * constructor.
-        -- apply app_evaluates_to with (EQ (LIST AINV) xs).
+        -- apply EVAL_EApp_Opapp with (EQ (LIST AINV) xs).
            ++ generalize dependent IHl.
               unfold EVAL, evaluate.
               intros IHl.
@@ -793,11 +793,12 @@ Proof.
   unfold EVAL_map12.
   intros A B AINV BINV.
   (* rename lemma *)
-  apply function_eval_lemma.
-  - (* ??? *)
-    constructor.
-    constructor.
-    constructor.
+  apply EVAL_EFun.
+  (* - intros. *)
+  (*   eapply EVAL_ELetrec. *)
+  (*   constructor. *)
+  (*   constructor. *)
+  (*   constructor. *)
   - intros f v fINV.
     unfold term11.
     apply EVAL_remove_EQ.
@@ -851,7 +852,7 @@ Proof.
            ++ solve_nsLookup.
            ++ constructor.
               unfold term4.
-              eapply app_evaluates_to.
+              eapply EVAL_EApp_Opapp.
               unfold term2.
               apply EVAL_EVar with v.
               solve_nsLookup.
@@ -863,7 +864,7 @@ Proof.
               constructor.
               unfold term7.
               simpl.
-              eapply app_evaluates_to.
+              eapply EVAL_EApp_Opapp.
               (* need to figure out how to generalize this *)
               ** unfold term5.
                  generalize dependent IHl.

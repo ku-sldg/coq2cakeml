@@ -4,6 +4,7 @@ DECLARE PLUGIN "coq2cakeml.plugin"
   open Stdarg
   open Extraction
   open InvGen
+  open CertificateGen
 
 }
 
@@ -12,4 +13,5 @@ VERNAC COMMAND EXTEND Extraction CLASSIFIED AS QUERY
 | [ "Translate" global(x) ] -> { translate_and_print x }
 | [ "TranslateDefine" global(x) ] -> { translate_and_add_to_global_environment x }
 | [ "GenerateInvariant" global(x) ] -> { generate_refinement_invariant x }
+| [ "GenerateCertificate" global(x) ] -> {generate_certificate_theorem x}
 END

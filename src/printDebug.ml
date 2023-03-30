@@ -34,6 +34,19 @@ let print_constr ?(debruijn = false) ?(env = Global.env ()) e =
 
   Feedback.msg_info msg
 
+let print_econstr ?(debruijn = false) ?(env = Global.env ()) e =
+  let sigma = Evd.from_env env in
+  let env' = if debruijn then Environ.pop_rel_context (Environ.nb_rel env) env
+    else env in
+
+  (* debuggin sesh*)
+  let ofc = e in
+  let ast = (Constrextern.extern_constr env' sigma ofc) in
+  let msg = Ppconstr.pr_constr_expr env' sigma ast in
+  (* END debuggin sesh*)
+
+  Feedback.msg_info msg
+
 let print_arity arity =
   let open Declarations in
   let open Sorts in
