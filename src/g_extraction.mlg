@@ -5,7 +5,6 @@ DECLARE PLUGIN "coq2cakeml.plugin"
   open Extraction
   open InvGen
   open CertificateGen
-  open CaseRuleGenerator
 }
 
 VERNAC COMMAND EXTEND CakeTranslate CLASSIFIED AS QUERY
