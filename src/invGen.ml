@@ -5,6 +5,7 @@ exception Unimplemented of string
 exception GenEx of string
 
 let global_invariant_table : EConstr.t Names.Indmap.t ref = ref Names.Indmap.empty
+let reset_global_invariant_table () = global_invariant_table := Names.Indmap.empty
 
 (* Should be in a different place *)
 let id_of_name ?(anon="x") n =
@@ -41,7 +42,7 @@ let refinement_invariant env name =
   (* Also needs to address parameters with arrow type *)
 
   (* For each parameter need to add two arguments to the invariant. One of which is an arbritrary invariant *)
-  let arb_inv_type = fun x -> mkArrowR x (mkArrowR (TypeGen.val_type ()) mkProp) in
+  let arb_inv_type = fun x -> mkArrowR x (mkArrowR (TypeGen.val_type) mkProp) in
 
   let invs = List.map (fun decl -> let open Context.Rel.Declaration in
                         let inv_name = Nameops.add_suffix (get_name decl |> id_of_name) "_INV" |> Names.Name.mk_name in
@@ -59,19 +60,19 @@ let refinement_invariant env name =
   let decreasing_arg_name = Namegen.hdchar env (Evd.from_env env) decreasing_arg_type |> Names.Id.of_string |> Context.annotR in
 
   let fix_name = Nameops.add_suffix (one_body.mind_typename) "_INV" |> Names.Name.mk_name |> Context.annotR in
-  let fix_type = mkNamedProd decreasing_arg_name decreasing_arg_type (mkArrowR (TypeGen.val_type ()) mkProp) in
+  let fix_type = mkNamedProd sigma decreasing_arg_name decreasing_arg_type (mkArrowR (TypeGen.val_type) mkProp) in
 
   let val_name = Names.Id.of_string "v" |> Context.annotR in
 
   let decreasing_arg_type = Vars.lift 1 decreasing_arg_type in
-  let fix_body = fun body -> mkNamedLambda decreasing_arg_name decreasing_arg_type (mkNamedLambda val_name (TypeGen.val_type ()) body) in
+  let fix_body = fun body -> mkNamedLambda sigma decreasing_arg_name decreasing_arg_type (mkNamedLambda sigma val_name (TypeGen.val_type) body) in
 
   let fix = fun body -> mkFix (([| 0 |], 0),
                                ([| fix_name |], [| fix_type |], [| fix_body body |])) in
 
   let env'' = push_rel (Context.Rel.Declaration.LocalAssum(fix_name,fix_type)) env' in
   let env'' = push_rel (Context.Rel.Declaration.LocalAssum(Context.map_annot Names.Name.mk_name decreasing_arg_name, decreasing_arg_type)) env'' in
-  let env'' = push_rel (Context.Rel.Declaration.LocalAssum(Context.map_annot Names.Name.mk_name val_name, TypeGen.val_type ())) env'' in
+  let env'' = push_rel (Context.Rel.Declaration.LocalAssum(Context.map_annot Names.Name.mk_name val_name, TypeGen.val_type)) env'' in
   let sigma = Evd.from_env env'' in
 
   let offset = 3 in (* to be used later in the case that the function is not recursive *)
@@ -145,26 +146,26 @@ let refinement_invariant env name =
                                                     Names.Name.mk_name |>
                                                     Context.annotR, typ, build_existentials typ (index + 1) body))
     in
-    let existentials = build_existentials (TypeGen.val_type ()) 0 in
+    let existentials = build_existentials (TypeGen.val_type) 0 in
     let cake_val =
       let fixed_name = String.capitalize_ascii constr_name |> TermGen.str_to_coq_str in
       let stamp = mkApp (TermGen.get_stamp_constr "TypeStamp", [| fixed_name; TermGen.get_nat_constr "O" |]) in (* Here we're always giving the typestamp 0, might need to change later *)
       let stamp_op = TermGen.option_to_coq_option (Some stamp) TypeGen.stamp_type in
 
-      let args = let _,v = Evarsolve.refresh_universes None env'' sigma (TypeGen.val_type ()) in
+      let args = let _,v = Evarsolve.refresh_universes None env'' sigma (TypeGen.val_type) in
         TermGen.list_to_coq_list existential_vars v in
 
       mkApp (TermGen.get_val_constr "Conv",[|stamp_op; args|])
     in
 
-    let equality = TypeGen.eq_type (TypeGen.val_type ()) (mkRel (2 * nargs + 1)) cake_val in
+    let equality = TypeGen.eq_type (TypeGen.val_type) (mkRel (2 * nargs + 1)) cake_val in
     lam (existentials (combine_invs (equality :: List.rev invs)))
   in
 
   let open Inductiveops in
   let ind_type = make_ind_type (make_ind_family (Univ.in_punivs (name,0), Array.init mut_body.mind_nparams (fun i -> Constr.mkRel (2 * mut_body.mind_nparams - i + offset)) |> Array.to_list), []) in
   let case_info = make_case_info env (name,0) Sorts.Relevant Constr.RegularStyle in (* might switch case style once branches are properly instantiated *)
-  let return =  EConstr.mkLambda (Context.anonR, decreasing_arg_type |> Vars.lift 2, EConstr.mkProp) in
+  let return =  EConstr.mkLambda (Context.anonR, Vars.lift 2 decreasing_arg_type, EConstr.mkProp) in
 
   let consargs = Array.map fst one_body.mind_nf_lc |> Array.map EConstr.of_rel_context in
   let consnames = one_body.mind_consnames |> Array.map Names.Id.to_string in

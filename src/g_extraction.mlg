@@ -5,13 +5,33 @@ DECLARE PLUGIN "coq2cakeml.plugin"
   open Extraction
   open InvGen
   open CertificateGen
-
+  open CaseRuleGenerator
 }
 
-VERNAC COMMAND EXTEND Extraction CLASSIFIED AS QUERY
+VERNAC COMMAND EXTEND CakeTranslate CLASSIFIED AS QUERY
 (* Extraction in the Coq toplevel *)
 | [ "Translate" global(x) ] -> { translate_and_print x }
 | [ "TranslateDefine" global(x) ] -> { translate_and_add_to_global_environment x }
 | [ "GenerateInvariant" global(x) ] -> { generate_refinement_invariant x }
-| [ "GenerateCertificate" global(x) ] -> {generate_certificate_theorem x}
+| [ "ClearSemEnv" ] -> { clear_semantic_environment () }
 END
+
+{
+let classify_generate_certificate x =
+  Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]))
+}
+
+VERNAC COMMAND EXTEND InvariateGen CLASSIFIED AS QUERY
+| [ "GenerateInvariantAndUpdate" global(x) ] -> { generate_invariant_and_update_environment x }
+END
+
+VERNAC COMMAND EXTEND CertificateGen CLASSIFIED BY {classify_generate_certificate}
+| ![program_interactive] [ "GenerateCertificate" global(ref) ] -> {generate_certificate_theorem ~ref}
+| ![program_interactive] [ "FinishProgram" string(name) ] -> {generate_decl_certificate_theorem name}
+END
+
+VERNAC COMMAND EXTEND CaseGen CLASSIFIED BY {classify_generate_certificate}
+| ![program_interactive] [ "GenerateMatchLemma" global(ref) ] -> {test_function ~ref}
+  END
+
+(* | [ "EndProgram" ] -> { finish_program_and_generate_decs } *)

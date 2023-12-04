@@ -1,21 +1,27 @@
 (* Debugging functions *)
+let name_to_string n =
+  match n with
+  | Names.Name id -> Names.Id.to_string id
+  | Names.Anonymous -> "_"
+
 let rec print_constr_shape c =
   match Constr.kind c with
-  | Rel _ -> "Rel"
-  | Var _ -> "Var"
+  | Rel i -> "(Rel " ^ string_of_int i ^ ")"
+  | Var n -> String.concat "" ["(Var : "; Names.Id.to_string n; ")"]
   | Meta _ -> "Meta"
   | Evar _ -> "Evar"
   | Sort _ -> "Sort"
   | Cast _ -> "Cast"
-  | Prod (_,_,c') -> String.concat "" ["!. "; "("; print_constr_shape c'; ")"]
+  | Prod (n,t,c') when n.binder_name = Names.Anonymous -> String.concat "" ["(";print_constr_shape t;") -> "; print_constr_shape c']
+  | Prod (n,t,c') -> String.concat "" ["!(";name_to_string n.binder_name; " : "; print_constr_shape t;")."; print_constr_shape c']
   | Lambda (_,_,c') -> String.concat "" ["\\. "; "("; print_constr_shape c'; ")"]
   | LetIn (_,c1,_,c2) -> String.concat "" ["let ("; print_constr_shape c1; ") in ("; print_constr_shape c2; ")" ]
   | App (hd,args) -> String.concat "" ["("; String.concat " " (List.map print_constr_shape (hd :: Array.to_list args)); ")"]
   | Case (_,_,_,_,_,c',cs) ->
     String.concat "" ["case "; print_constr_shape c'; " of " ; Array.map snd cs |> Array.to_list |> List.map print_constr_shape |> String.concat " |->" ]
-  | Const _ -> "Const"
-  | Ind _ -> "Ind"
-  | Construct _ -> "Construct"
+  | Const (n,_) -> String.concat "" ["(Const : "; Names.Constant.to_string n; ")"]
+  | Ind ((n,i),_) -> String.concat "" ["(Ind : "; Names.Id.to_string (Environ.lookup_mind n (Global.env ())).mind_packets.(i).mind_typename; ")"]
+  | Construct (((n,i),ci),_) -> String.concat "" ["(Construct : "; Names.Id.to_string ((Environ.lookup_mind n (Global.env ())).mind_packets.(i)).mind_consnames.(0); ")"]
   | Fix ((_,i),(_,_,cs))-> String.concat "" ["f\\. ("; print_constr_shape cs.(i); ")"]
   | CoFix _ -> "CoFix"
   | Proj _ -> "Proj"
@@ -40,8 +46,8 @@ let print_econstr ?(debruijn = false) ?(env = Global.env ()) e =
     else env in
 
   (* debuggin sesh*)
-  let ofc = e in
-  let ast = (Constrextern.extern_constr env' sigma ofc) in
+  let _,_ = Typing.type_of env' sigma e in
+  let ast = (Constrextern.extern_constr env' sigma e) in
   let msg = Ppconstr.pr_constr_expr env' sigma ast in
   (* END debuggin sesh*)
 

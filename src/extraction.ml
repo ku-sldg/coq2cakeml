@@ -47,7 +47,7 @@ let rec translate_term env term =
     mkApp (get_exp_constr "EVar", [| id |])
 
   | Const (name,univs) ->
-    let name_str = Names.Constant.to_string name in
+    let name_str = name |> Names.Constant.label |> Names.Label.to_string in
     let id = ident_of_str name_str in
     mkApp (get_exp_constr "EVar", [| id |])
 
@@ -137,10 +137,10 @@ let rec translate_term env term =
 
   | Ind ((name, ci), _) -> raise (UnsupportedFeature ("Cannot extract types as terms"))
 
-  | Meta _
-  | Evar _
-  | Sort _
-  | Cast _
+  | Meta _ -> raise (UnsupportedFeature ("Meta"))
+  | Evar _ -> raise (UnsupportedFeature ("Evar"))
+  | Sort _ -> raise (UnsupportedFeature ("Sort"))
+  | Cast _ -> raise (UnsupportedFeature ("Cast"))
   | Prod _
   | Proj _
   | CoFix _
@@ -177,6 +177,8 @@ and translate_constructor env constructor args =
 and translate_application env func args =
   let rec opapp_helper env application_list =
     match application_list with
+    (* if all of the arguments of a function are types that are then erased it could be left as a singleton *)
+    | [x] -> translate_term env x
     | [a;f] ->
       mkApp (get_exp_constr "EApp",
              [| get_op_constr "Opapp"; list_to_coq_list [translate_term env f; translate_term env a] exp_type |])
@@ -334,6 +336,32 @@ let translate_let_declaration env name term =
 let translate_type_declaration env mut_body =
   mkApp (get_dec_cons "Dtype", [|unknown_loc; translate_type_definition env mut_body|])
 
+let translate_declaration r =
+  let glob_ref = locate_global_ref r in
+  let global_env = Global.env () in
+  match glob_ref with
+  | ConstRef const_name ->
+    let const_body = Environ.lookup_constant const_name global_env in
+    begin
+      match const_body.const_body with
+      | Def const ->
+        begin
+          try translate_let_declaration global_env const_name (EConstr.of_constr const) with
+          | (UnsupportedFeature error) as err -> Feedback.msg_info (Pp.str error); raise err
+        end
+      | Undef _ -> raise (UnsupportedFeature "Axioms not supported")
+      | _ -> Feedback.msg_info (Pp.str "Not a defined constant");
+        raise (UnsupportedFeature "translate_declaration: actually an error")
+    end
+
+  | IndRef (name,_) | ConstructRef ((name,_),_) ->
+    let mut_body = Environ.lookup_mind name global_env in
+    translate_type_declaration global_env mut_body
+
+  | VarRef _ ->
+    Feedback.msg_info (Pp.str "Not a constant at all: is a Section variable");
+    raise (UnsupportedFeature "translate_declaration: actually an error")
+
 let translate_and_print r =
   let glob_ref = locate_global_ref r in
   let global_env = Global.env () in
@@ -357,6 +385,12 @@ let translate_and_print r =
 
   | VarRef _ -> Feedback.msg_info (Pp.str "Not a constant at all: is a Section variable")
 
+let current_program = ref (list_to_coq_list [] dec_type)
+let reset_current_program () = current_program := list_to_coq_list [] dec_type
+
+let add_dec_to_current_program dec =
+  current_program := mkApp(get_list_constr "cons", [| dec_type; dec; !current_program |])
+
 let translate_and_add_to_global_environment r =
   let glob_ref = locate_global_ref r in
   let global_env = Global.env () in
@@ -377,6 +411,7 @@ let translate_and_add_to_global_environment r =
                                ~body:cake_declaration
                                Evd.empty
             in
+            let _ = add_dec_to_current_program cake_declaration in
             ()
 
           with
@@ -399,6 +434,7 @@ let translate_and_add_to_global_environment r =
             ~body:cake_type_def
             Evd.empty
         in
+        let _ = add_dec_to_current_program cake_type_def in
         ()
       with
       | UnsupportedFeature error -> Feedback.msg_info (Pp.str error)

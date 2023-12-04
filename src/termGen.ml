@@ -94,5 +94,22 @@ let rec ident_of_str ?(long = []) name_str =
   | h::t -> mkApp (get_ident_constr "Long",
                    [| string_type; string_type; str_to_coq_str h; ident_of_str ~long:t name_str|])
 
-let mk_eq typ t1 t2 =
+let get_eq_refl typ t1 t2 =
   mkApp (get_constructor "" "eq" "eq_refl", [|typ; t1; t2|])
+
+let get_constant module_name identifier_name =
+  let const_qualid = Libnames.qualid_of_string (if module_name != ""
+                                                then (String.concat "." [module_name; identifier_name])
+                                                else identifier_name)
+  in
+  let constant = Smartlocate.global_constant_with_alias const_qualid in
+  mkConst constant
+
+let mk_nsBind = get_constant "Namespace" "nsBind"
+let mk_extend_dec_env = get_constant "SemanticsAux" "extend_dec_env"
+let mk_nsEmpty = get_constant "Namespace" "nsEmpty"
+let mk_Build_sem_env = get_constructor "SemanticsAux" "sem_env" "Build_sem_env"
+
+let mk_good_cons_env = get_constant "RefineInv" "good_cons_env"
+
+let unknown_loc = list_to_coq_list [] nat_type

@@ -28,14 +28,6 @@ Definition BOOL (b : bool) (v : val) : Prop :=
   | false => v = Conv (Some (TypeStamp "False" O)) []
   end.
 
-Definition good_cons_env (pes : list (pat * exp)) (env : sem_env val) (consty : stamp):=
-  Forall (fun '(p,e) => exists con_name ps ty,
-              p = Pcon (Some con_name) ps /\
-                NoDup (pat_bindings p []) /\
-                nsLookup ident_string_beq con_name (sec env) = Some (length ps, TypeStamp (id_to_n con_name) ty) /\
-                stamp_same_type (TypeStamp (id_to_n con_name) ty) consty = true) pes.
-
-
 Theorem simple_list_cases_inv : forall (A B : Type) (a_inv : A -> val -> Prop ) (b_inv : B -> val -> Prop) (mat c1 c2 : exp) (b1 : B) (b2 : A -> list A -> B) (l : list A) (orig : B) a_str l'_str env,
   (* Hate this *)
   orig = match l with [] => b1 | x::xs => b2 x xs end ->
@@ -173,7 +165,15 @@ Proof.
           intro contra.
           inv contra.
           constructor. }
+        break_match; try contradiction.
+        break_match; try contradiction.
+        rewrite String.eqb_eq in Heqb1.
+        subst.
+        inv H.
+        assert (In a_str [a_str]) by (left; reflexivity).
         contradiction.
+        inv Heqb0.
+        inv Heqb.
     + simp eval_or_match; simpl.
     + simp eval_or_match; simpl.
       rewrite H_match; simpl.
@@ -196,7 +196,15 @@ Proof.
           intro contra.
           inv contra.
           constructor. }
+        break_match; try contradiction.
+        break_match; try contradiction.
+        rewrite String.eqb_eq in Heqb1.
+        subst.
+        inv H.
+        assert (In a_str [a_str]) by (left; reflexivity).
         contradiction.
+        inv Heqb0.
+        inv Heqb.
     + assumption.
     + simp eval_or_match; simpl.
       eapply more_fuel_same_value in H_match.
@@ -210,6 +218,10 @@ Proof.
       rewrite Hlookup_cons; simpl.
       rewrite PeanoNat.Nat.eqb_eq in Htype_eq_cons; subst; simpl.
       simp pmatch; simpl.
+      rewrite <- String.eqb_neq in n.
+      rewrite String.eqb_sym.
+      rewrite n.
+      simp eval_or_match.
       lia.
     + assumption.
 Qed.
@@ -318,10 +330,8 @@ Proof.
               simp eval_or_match in *; simpl in *.
               split.
               reflexivity.
-              break_match.
               inv IHeval.
               assumption.
-              inv IHeval.
            ++ apply EVAL_EQ.
               unfold EVAL, evaluate.
               intro st.
@@ -365,7 +375,7 @@ Proof.
   - intros. apply length_final_exp.
 Qed.
 
-Definition DECL (st : state ST) (env : sem_env val) (decs : list dec) (st' : state ST) (env' : sem_env val) : Prop := exists f, evaluate_decs f st env decs = (st', Rval env').
+Definition DECL (st : state ST) (env : sem_env val) (decs : list dec) (st' : state ST) (env' : sem_env val) : Prop :=   exists f,  evaluate_decs f st env decs = (st', Rval env').
 
 Theorem DECL_nil : forall st env, DECL st env [] st empty_sem_env.
 Proof.
@@ -384,10 +394,16 @@ Proof.
   - break_match.
     + remember (evaluate [e] fuel st env). destruct p0. destruct r.
       symmetry in Heqp0.
+      unfold evaluate in Heqp0.
+      rewrite Heqp0 in H.
       apply (more_fuel_same_value fuel (S fuel)) in Heqp0; try lia.
+      unfold evaluate in Heqp0.
       rewrite Heqp0.
       assumption.
       inv Heqp0.
+      inv H.
+      unfold evaluate in Heqp0.
+      rewrite <- Heqp0 in *.
       inv H.
     + inv H.
   - remember (evaluate_decs fuel st env ds). destruct p. rewrite Heqp in H. destruct r.
@@ -448,6 +464,7 @@ Proof.
   exists v, ste, f.
   simp evaluate_decs.
   simpl.
+  unfold evaluate in Heval.
   rewrite Heval.
   simp pmatch.
   simpl.
@@ -477,9 +494,16 @@ Proof.
   simp evaluate_decs; simpl.
   break_match.
   - reflexivity.
-  - assert (contra :  Forall UniqueCtorsInDef [(tyvars, tyname, constrs)]) by
-      (constructor; try assumption; try constructor).
-    contradiction.
+  - rewrite <- nodup_str_NoDup in H.
+    assert (forall (l : list (tvarN * list ast_t)),
+    nodup_str (map fst l) =
+      nodup_str (map (fun '(n, _) => n) l)) by
+      ( induction l; try reflexivity;
+        try (break_match; try reflexivity)).
+    specialize (H0 constrs).
+    rewrite H0 in H.
+    rewrite H in Heqb.
+    simpl in Heqb. inv Heqb.
 Qed.
 
 Theorem DECL_cons : forall st env d ds st' st'' env' env'',
@@ -661,7 +685,14 @@ Proof.
           intro contra.
           inv contra.
           constructor. }
+        break_match; try contradiction.
+        break_match.
+        rewrite String.eqb_eq in Heqb1; subst.
+        inv H.
+        assert (In a_str [a_str]) by (left; reflexivity).
         contradiction.
+        inv Heqb0.
+        inv Heqb.
     + simp eval_or_match; simpl.
     + simp eval_or_match; simpl.
       rewrite H_match; simpl.
@@ -674,16 +705,11 @@ Proof.
       rewrite PeanoNat.Nat.eqb_eq in Htypeeq; subst; simpl.
       break_match; simpl.
       * apply H_clause2.
-      * assert (NoDup [l'_str; a_str]).
-        { constructor.
-          intro contra.
-          inv contra.
-          contradiction.
-          inv H.
-          constructor.
-          intro contra.
-          inv contra.
-          constructor. }
+      * break_match; try inv Heqb.
+        break_match; try inv Heqb0.
+        rewrite String.eqb_eq in Heqb1; subst.
+        inv HNoDupcons.
+        assert (In a_str [a_str]) by (left; reflexivity).
         contradiction.
     + assumption.
     + simp eval_or_match; simpl.
@@ -698,6 +724,10 @@ Proof.
       rewrite Hlookup_cons; simpl.
       rewrite PeanoNat.Nat.eqb_eq in Htype_eq_cons; subst; simpl.
       simp pmatch; simpl.
+      rewrite <- String.eqb_neq in n.
+      rewrite String.eqb_sym in n.
+      rewrite n.
+      simp eval_or_match.
       lia.
     + assumption.
 Qed.
@@ -766,7 +796,6 @@ Definition EVAL_map9 (A B : Type) (AINV : A -> val -> Prop) (BINV : B -> val -> 
                                           | a :: t => f a :: fixpoint t
                                           end)).
 
-Print map.
 (* Should this always be tied to term11 in the case of fix? *)
 Definition term10 := EVar (Short "map").
 Definition EVAL_map10 (A B : Type) (AINV : A -> val -> Prop) (BINV : B -> val -> Prop) (f : A -> B) (fixpoint : list A -> list B) (l : list A) :=
@@ -875,11 +904,9 @@ Proof.
                  exists v2, f0, st'.
                  split.
                  simp eval_or_match in *; simpl in *.
-                 break_if.
                  unfold term10 in Heval.
-                 simp eval_or_match in Heval; simpl in *.
-                 inv Heval.
-                 apply feqINV.
+                 simp eval_or_match in Heval.
+                 simp eval_or_match in Heval.
               ** unfold term6.
                  eapply EVAL_EVar.
                  solve_nsLookup.
