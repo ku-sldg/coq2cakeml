@@ -112,7 +112,8 @@ let refinement_invariant env name =
           Array.map (mk_inv nargs index) args
       in
       mkApp (inv, Array.append params invs)
-    | _ -> raise (Unimplemented "mkbranch: funny business, TJ fix ur shit")
+    | Const (name,univ) -> raise (Unimplemented "I WAS A CONST THE WHOLE TIME YOU BITCH")
+    | _ ->  raise (Unimplemented "mkbranch: funny business, TJ fix ur shit")
   in
 
   let rec combine_invs invs =
@@ -183,16 +184,14 @@ let refinement_invariant env name =
 (* adds invariant to the global invariant table as a side effect *)
 (* let register_refinement_inv (name : Names.inductive) (inv : Constr.t) = *)
 
-let generate_refinement_invariant r =
-  let glob_ref = locate_global_ref r in
+let generate_refinement_invariant_from_type_name (name : Names.inductive) =
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
-  match glob_ref with
-  | IndRef (name, index) ->
+  let (mutname,index) = name in
     if index > 0 then raise (UnsupportedFeature "Mutually Recursive types are not supported")
-    else let ref_inv = refinement_invariant global_env name in
+    else let ref_inv = refinement_invariant global_env mutname in
       let sigma',dec_type = Typing.type_of ~refresh:true global_env sigma ref_inv in
-      let dec_name = Nameops.add_suffix (Environ.lookup_mind name global_env).mind_packets.(0).mind_typename "_INV" in
+      let dec_name = Nameops.add_suffix (Environ.lookup_mind mutname global_env).mind_packets.(0).mind_typename "_INV" in
       let invariant_glob_ref = Declare.declare_definition
         ~info:(Declare.Info.make ())
         ~cinfo:(Declare.CInfo.make ~name:dec_name ~typ:(Some dec_type) ())
@@ -205,9 +204,12 @@ let generate_refinement_invariant r =
         if isConstRef invariant_glob_ref then
           mkConst (destConstRef invariant_glob_ref)
         else
-          raise (GenEx "Not a constant reference")
+          raise (GenEx "Not a constant reference which is weird cause I just made this")
       in
-      global_invariant_table := Names.Indmap.add (name,0) constant_ref !global_invariant_table
-      (* register_refinement_invariant ref_inv *)
+      global_invariant_table := Names.Indmap.add (mutname,0) constant_ref !global_invariant_table
 
-  | _ -> Feedback.msg_info (Pp.str "Not an inductive type: is a Section variable")
+let generate_refinement_invariant r =
+  let glob_ref = locate_global_ref r in
+  match glob_ref with
+  | IndRef name -> generate_refinement_invariant_from_type_name name
+  | _ -> Feedback.msg_info (Pp.str "Not an inductive type reference variable")

@@ -165,7 +165,21 @@ let generate_invariant_and_update_environment ref =
     current_cake_env := Reductionops.nf_all global_env sigma (mk_extend_dec_env (coq_snd sigma res) !current_cake_env);
     (* PrintDebug.print_econstr !current_cake_env; *)
     current_cake_st := (coq_fst sigma res)
-
+  | ConstRef (constname) -> print_string "certificateGen.generate_invariant_and_update_environment: CONSTREF\n";
+    let const_deref = Environ.lookup_constant constname global_env in
+    begin
+      match const_deref.const_body with
+      | Def term ->
+        begin match Constr.kind term with
+          | Ind (ind_name,_) -> InvGen.generate_refinement_invariant_from_type_name ind_namd
+          | Construct ((ind_name,_),_) -> InvGen.generate_refinement_invariant_from_type_name ind_name
+          | Const _ -> print_string "constant 2 electric boogaloo"
+          | _ -> print_string "generate_invariant_and_update_environment: hella sad"
+        end
+      | Undef _ -> print_string "Undef\n"
+      | OpaqueDef _ -> print_string "Opaque"
+      | Primitive _ -> print_string "Primitive"
+    end
   | _ -> raise (UnsupportedFeature "must be a reference to constructor or inductive type")
 
 let generate_certificate_theorem ~pm ~ref =

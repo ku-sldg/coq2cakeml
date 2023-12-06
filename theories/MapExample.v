@@ -16,6 +16,7 @@ Open Scope string_scope.
 Require Import ExampleInv.
 
 GenerateInvariantAndUpdate list.
+Print list_INV.
 GenerateMatchLemma list.
   intros.
   destruct matched;
@@ -106,9 +107,6 @@ GenerateMatchLemma list.
     assumption.
 Qed.
 
-(* Definition dumb (A : Type) := [id A; id A]. *)
-(* GenerateCertificate dumb. *)
-
 Theorem EVAL_ECon_list_nil :
   forall A A_INV env,
     nsLookup ident_string_beq (Short "Nil") (sec env) = Some (0, TypeStamp "Nil" 0) ->
@@ -146,9 +144,6 @@ Proof.
   apply (more_fuel_same_value f1 (f1 + f2)) in Hevale1.
   apply (more_fuel_same_value f2 (f1 + f2)) in Hevale2.
   unfold evaluate in *.
-  (* eexists. *)
-  (* exists (f1 + f2). *)
-  (* eexists. *)
   do 3 eexists.
   split.
   simp eval_or_match; simpl.
@@ -213,6 +208,9 @@ Obligations.
               unfold EQ. split; inv H0; try reflexivity; try assumption.
 Qed.
 
+Print map.
+Search "certificate".
+
 FinishProgram "map".
 Obligations.
   unfold DECL.
@@ -226,4 +224,4 @@ Obligations.
   constructor.
 Qed.
 
-(* Check cake_prog_map_certificate_thm. *)
+Check cake_prog_map_certificate_thm.
