@@ -228,8 +228,14 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   let eval_term = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "RefineInv.EVAL") in
   let mkEVAL cake_env exp inv = mkApp(mkConst eval_term,[|cake_env; exp; inv|]) in
+
+  let inv_id = Nameops.add_suffix (Environ.lookup_mind (fst inductive_name) (Global.env ())).mind_packets.(0).mind_typename "_INV" in
+  let inv_const =
+    try mkConst (Nametab.locate_constant (Libnames.qualid_of_ident inv_id))
+    with Not_found -> raise (InvGen.GenEx (String.concat "" [Names.Id.to_string inv_id; " is not defined in the current environment"]))
+  in
   let eval_prop = mkEVAL (mkVar env_name) (mkVar mat)
-      (mkApp (Names.Indmap.find inductive_name !(InvGen.global_invariant_table),
+      (mkApp (inv_const,
               List.append (List.append param_names refinement_invariant_names) [matched_name] |>
               Array.of_list |>
               Array.map mkVar ))
@@ -264,7 +270,12 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
     let rec mk_inv typ arg_index =
       match kind sigma typ with
       | Rel i -> mkVar (Id.of_string ("PARAM" ^ (string_of_int (rel_to_param arg_index i num_constructor_args num_params)) ^ "_INV"))
-      | Ind (ind_name,_) -> Names.Indmap.find ind_name !InvGen.global_invariant_table
+      | Ind (ind_name,_) ->
+        let inv_id = Nameops.add_suffix (Environ.lookup_mind (fst ind_name) (Global.env ())).mind_packets.(0).mind_typename "_INV" in
+        begin
+          try mkConst (Nametab.locate_constant (Libnames.qualid_of_ident inv_id))
+          with Not_found -> raise (InvGen.GenEx (String.concat "" [Names.Id.to_string inv_id; " was not found in the current environment"]))
+        end
       | App (hd,args) -> mkApp (mk_inv hd arg_index, Array.append (Array.map (convert_rel_to_named num_constructor_args arg_index) args) (Array.map (fun t -> mk_inv t arg_index) args) )
 
       | _ -> raise (InvGen.GenEx "messed up or an error: unclear yet")
@@ -291,7 +302,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
                                                    mkApp (mk_Build_sem_env, [|val_type; nsBind_list; nsEmpty_sec|]);
                                                    mkVar env_name |]) in
 
-    let eval_prop = CertificateGen.mkEVAL updated_env (mkVar (List.nth c_names index)) (mkApp (mkVar result_invariant_name, [|mkApp (mkVar (List.nth b_names index), Array.of_list arg_names |> Array.map mkVar)|] )) in
+    let eval_prop = TermGen.mkEVAL updated_env (mkVar (List.nth c_names index)) (mkApp (mkVar result_invariant_name, [|mkApp (mkVar (List.nth b_names index), Array.of_list arg_names |> Array.map mkVar)|] )) in
 
     let full_prop_var = mkArrowR match_eq_prop
         (List.fold_right mkArrowR applied_invs eval_prop)

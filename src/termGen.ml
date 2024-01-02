@@ -113,3 +113,9 @@ let mk_Build_sem_env = get_constructor "SemanticsAux" "sem_env" "Build_sem_env"
 let mk_good_cons_env = get_constant "RefineInv" "good_cons_env"
 
 let unknown_loc = list_to_coq_list [] nat_type
+
+let func_inv = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "RefineInv.FUNC")
+let mkFUNC typ1 typ2 inv1 inv2 = mkApp(mkConst func_inv,[|typ1; typ2; inv1; inv2|])
+
+let eval_term = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "RefineInv.EVAL")
+let mkEVAL cake_env exp inv = mkApp(mkConst eval_term,[|cake_env; exp; inv|])

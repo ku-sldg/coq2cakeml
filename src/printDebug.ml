@@ -112,3 +112,5 @@ let rec print_env_rel ?(debruijn = false) (env : Environ.env) =
       else env' in
     print_pt ~env:env'' pt;
     print_env_rel ~debruijn:debruijn env'
+
+let ps s = Feedback.msg_info (Pp.str s)

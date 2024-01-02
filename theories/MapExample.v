@@ -15,8 +15,8 @@ Open Scope string_scope.
 
 Require Import ExampleInv.
 
-GenerateInvariantAndUpdate list.
-Print list_INV.
+PrintInvariant list.
+GenerateInvariant list.
 GenerateMatchLemma list.
   intros.
   destruct matched;
@@ -208,9 +208,6 @@ Obligations.
               unfold EQ. split; inv H0; try reflexivity; try assumption.
 Qed.
 
-Print map.
-Search "certificate".
-
 FinishProgram "map".
 Obligations.
   unfold DECL.
@@ -223,5 +220,3 @@ Obligations.
   Unshelve.
   constructor.
 Qed.
-
-Check cake_prog_map_certificate_thm.

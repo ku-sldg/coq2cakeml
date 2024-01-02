@@ -1,18 +1,11 @@
 open Extraction
 open EConstr
+open NameManip
+open TermGen
+open Hipattern
 
 exception Unimplemented of string
 exception GenEx of string
-
-let global_invariant_table : EConstr.t Names.Indmap.t ref = ref Names.Indmap.empty
-let reset_global_invariant_table () = global_invariant_table := Names.Indmap.empty
-
-(* Should be in a different place *)
-let id_of_name ?(anon="x") n =
-  let open Names in
-  match n with
-  | Anonymous -> Id.of_string anon
-  | Name id -> id
 
 (* general shape of a refinement invariant *)
 (* Given: *)
@@ -82,7 +75,7 @@ let refinement_invariant env name =
     | Rel i -> mkRel (2 * nargs + offset + nparams + i + index - 1)
     | App (hd,args) -> mkApp (mk_type nargs index hd, Array.map (mk_type nargs index) args)
     | Ind (name,_) -> typ
-    | _ -> raise (UnsupportedFeature "TJ FIX ME PWEAAAAASE")
+    | _ -> raise (GenEx "refinement_invariant: TJ FIX ME PWEAAAAASE")
   in
 
   let rec mk_inv nargs index typ =
@@ -91,7 +84,18 @@ let refinement_invariant env name =
     | Ind (typ_name,_) ->
       if Names.Ind.CanOrd.equal typ_name (name,0) then
         mkRel (2 * nargs + offset)
-      else Names.Indmap.find typ_name !global_invariant_table
+      else
+        (* figure out name to use  *)
+        (* check if that exists in the current global environment *)
+        (* if so then add here else throw exception and say why *)
+        let global_env = Global.env () in
+        let possible_inv_id = Nameops.add_suffix (Environ.lookup_mind (fst typ_name) global_env).mind_packets.(0).mind_typename "_INV" in
+        begin
+          try mkConst (Nametab.locate_constant (Libnames.qualid_of_ident possible_inv_id))
+          with Not_found -> Feedback.msg_info
+                              (Pp.str (String.concat "" [(Names.Id.to_string possible_inv_id); " was not found in the current environment."]));
+            raise (GenEx "refinement invariant: missing invariant")
+        end
     | App (hd,args) ->
       let is_rec =
         if isInd sigma hd then
@@ -179,37 +183,150 @@ let refinement_invariant env name =
 
   func_hd match_exp
 
+(* Convert Debruijn numbers to named variables when applicable *)
+let rec rels_to_vars env typ =
+  let open Context.Rel.Declaration in
+  let sigma = Evd.from_env env in
+  match kind sigma typ with
+  (* TODO: if ANON then keep Rel *)
+  | Rel i -> lookup_rel i env |> get_name |> id_of_name ~anon:"ANON" |> mkVar
+  | Prod (name,typ',body) ->
+    let env' = push_rel (LocalAssum (name,typ')) env in
+    let typ'' = rels_to_vars env typ' in
+    let body' = rels_to_vars env' body in
+    mkProd (name,typ'',body')
+  | App (hd,args) -> mkApp (rels_to_vars env hd, Array.map (rels_to_vars env) args)
+  | Ind _ -> typ
+  | _ -> PrintDebug.ps "rels_to_vars : not specifically implemented yet"; typ
+
+let rec invariant_from_type env typ =
+  let open Context.Rel.Declaration in
+  let open Names in
+  let sigma = Evd.from_env env in
+  match kind sigma typ with
+  (* possible dependent heuristic is if a rel points to something that is NOT a sort *)
+  | Rel i ->
+    lookup_rel i env |> get_name |>
+    id_of_name ~anon:"ANON" |>
+    fun id -> Nameops.add_suffix id "_INV" |> mkVar
+
+  | Ind (name,_) ->
+    let possible_inv_id = Nameops.add_suffix (Environ.lookup_mind (fst name) (Global.env ())).mind_packets.(0).mind_typename "_INV" in
+        begin
+          try mkConst (Nametab.locate_constant (Libnames.qualid_of_ident possible_inv_id))
+          with Not_found ->
+            begin
+              Feedback.msg_info
+                (Pp.str (String.concat "" [(Names.Id.to_string possible_inv_id); " was not found in the current environment."]));
+              raise (GenEx "invariant_from_type: missing invariant")
+            end
+        end
+
+  | Prod (name,typ',body) ->
+    let env' = push_rel (LocalAssum (name,typ')) env in
+    let body_inv = invariant_from_type env' body in
+    let sigma' = Evd.from_env env' in
+
+    if isArity sigma typ' then
+      let inv_id = String.concat "" [TermGen.name_to_str ~anon:"ANON" name.binder_name; "_INV"] |>
+                     Id.of_string  in
+      let inv_name = Name inv_id in
+
+      let inv_type = mkProd(Context.annotR Name.Anonymous,mkRel 1,
+                            mkProd(Context.annotR Name.Anonymous,TypeGen.val_type,mkProp)) in
+      let body_inv' = Vars.subst_var sigma' (id_of_name ~anon:"ANON" name.binder_name) body_inv in
+      let body_inv'' = Vars.lift 1 body_inv' in
+      let body_inv''' = Vars.subst_var sigma' inv_id body_inv'' in
+
+      mkProd (name, typ', mkProd (Context.annotR inv_name, inv_type, body_inv'''))
+    else
+      let vard_type = rels_to_vars env typ' in
+      let vard_body = rels_to_vars env' body in
+      let sigma' = Evd.from_env env' in
+      let prods,decl = decompose_prod sigma' body_inv in
+      let prods' = List.map (fun (x,y) -> LocalAssum (x,y)) prods in
+      let inv1 = invariant_from_type env typ' in
+      it_mkProd_or_LetIn (mkFUNC vard_type vard_body inv1 decl) prods'
+
+  | App (hd,args) ->
+    let hd_inv = invariant_from_type env hd in
+    let arg_types = Array.map (rels_to_vars env) args in
+    let args_inv = Array.map (invariant_from_type env) args in
+    mkApp(hd_inv,Array.concat [arg_types; args_inv])
+
+  | Const (constname,univ) ->
+    let inv_id = NameManip.constant_inv_name constname in
+    mkConst (Libnames.qualid_of_ident inv_id |> Smartlocate.global_constant_with_alias)
+
+  | Var name -> raise (UnsupportedFeature "invariant_from_type : havent done var")
+
+  | Sort sort -> raise (UnsupportedFeature "invariant_from_type : havent done sort")
+
+  | Lambda _ -> raise (UnsupportedFeature "invariant_from_type : havent done lambda")
+
+  | Case _ -> raise (UnsupportedFeature "invariant_from_type : havent done case")
 
 
-(* adds invariant to the global invariant table as a side effect *)
-(* let register_refinement_inv (name : Names.inductive) (inv : Constr.t) = *)
+  | _ -> raise (UnsupportedFeature "invariant_from_type : haven't done yet")
 
-let generate_refinement_invariant_from_type_name (name : Names.inductive) =
+let generate_refinement_invariant r =
+  let glob_ref = locate_global_ref r in
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
-  let (mutname,index) = name in
-    if index > 0 then raise (UnsupportedFeature "Mutually Recursive types are not supported")
-    else let ref_inv = refinement_invariant global_env mutname in
-      let sigma',dec_type = Typing.type_of ~refresh:true global_env sigma ref_inv in
-      let dec_name = Nameops.add_suffix (Environ.lookup_mind mutname global_env).mind_packets.(0).mind_typename "_INV" in
-      let invariant_glob_ref = Declare.declare_definition
+  match glob_ref with
+  | IndRef (mutname,index) ->
+    if index > 0 then raise (UnsupportedFeature "Mutually Recursive types are not supported");
+    if not (Hipattern.is_nodep_ind global_env sigma (mkInd (mutname,index))) then raise (UnsupportedFeature "Dependent types are not supported");
+    let ref_inv = refinement_invariant global_env mutname in
+    let sigma',dec_type = Typing.type_of ~refresh:true global_env sigma ref_inv in
+    let dec_name = Nameops.add_suffix (Environ.lookup_mind mutname global_env).mind_packets.(0).mind_typename "_INV" in
+    let _ = Declare.declare_definition
         ~info:(Declare.Info.make ())
         ~cinfo:(Declare.CInfo.make ~name:dec_name ~typ:(Some dec_type) ())
         ~opaque:false
         ~body: ref_inv
         sigma'
-      in
-      let constant_ref =
-        let open Globnames in
-        if isConstRef invariant_glob_ref then
-          mkConst (destConstRef invariant_glob_ref)
-        else
-          raise (GenEx "Not a constant reference which is weird cause I just made this")
-      in
-      global_invariant_table := Names.Indmap.add (mutname,0) constant_ref !global_invariant_table
+    in
+    ()
+  | ConstRef name ->
+    let body = Global.lookup_constant name in
+    let const_type = EConstr.of_constr body.const_type in
+    if isArity sigma const_type then
+      match body.const_body with
+      | Def term ->
+        let ref_inv = invariant_from_type global_env (EConstr.of_constr term) in
+        let sigma',dec_type = Typing.type_of ~refresh:true global_env sigma ref_inv in
+        let dec_name = Nameops.add_suffix (Names.Constant.label name |> Names.Label.to_id) "_INV" in
+        let _ = Declare.declare_definition
+            ~info:(Declare.Info.make ())
+            ~cinfo:(Declare.CInfo.make ~name:dec_name ~typ:(Some dec_type) ())
+            ~opaque:false
+            ~body: ref_inv
+            sigma'
+        in
+        ()
+      | _ -> raise (UnsupportedFeature "only handling defined, transparent references")
+    else raise (GenEx "Constant reference must be doing something")
+  | _ -> raise (GenEx "Not an inductive type reference")
 
-let generate_refinement_invariant r =
+let print_refinement_invariant r =
   let glob_ref = locate_global_ref r in
+  let global_env = Global.env () in
+  let sigma = Evd.from_env global_env in
   match glob_ref with
-  | IndRef name -> generate_refinement_invariant_from_type_name name
-  | _ -> Feedback.msg_info (Pp.str "Not an inductive type reference variable")
+  | IndRef (mutname, index) ->
+    if index > 0 then raise (UnsupportedFeature "Mutually Recursive types are not supported");
+    let inv_term = refinement_invariant global_env mutname in
+    PrintDebug.print_econstr inv_term
+  | ConstRef name ->
+    let body = Global.lookup_constant name in
+    let const_type = EConstr.of_constr body.const_type in
+    if isArity sigma const_type then
+      match body.const_body with
+        | Def term ->
+          let _ = if has_nodep_prod global_env sigma (EConstr.of_constr term) then print_string "non dep\n" else print_string "dep\n" in
+          let inv_term = invariant_from_type global_env (EConstr.of_constr term) in
+          PrintDebug.print_econstr inv_term
+        | _ -> raise (UnsupportedFeature "only handling defined, transparent references")
+    else raise (GenEx "Constant reference must be doing something")
+  | _ -> Feedback.msg_info (Pp.str "Not an inductive type reference")

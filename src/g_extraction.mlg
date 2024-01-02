@@ -6,32 +6,90 @@ DECLARE PLUGIN "coq2cakeml.plugin"
   open InvGen
   open CertificateGen
   open CaseRuleGenerator
+  open CakeEnv
+}
+
+{
+open Hipattern
+let is_dependent_ref r =
+  let glob_ref = Extraction.locate_global_ref r in
+  let global_env = Global.env () in
+  let sigma = Evd.from_env global_env in
+  match glob_ref with
+  | ConstRef constname ->
+    print_string "ConstRef:\n";
+    let constbody = Global.lookup_constant constname in
+    let typ = constbody.const_type in
+    if has_nodep_prod global_env sigma (EConstr.of_constr typ) then
+      print_string "no deps"
+    else
+      print_string "deps"
+  | IndRef indname ->
+    print_string "IndRef:\n";
+    let indterm = EConstr.mkInd indname in
+    if is_nodep_ind global_env sigma indterm then
+      print_string "no deps"
+    else
+      print_string "deps"
+
+  | ConstructRef constructname ->
+    print_string "ConstructRef:\n";
+    let constterm = EConstr.mkConstruct constructname in
+    if is_nodep_ind global_env sigma constterm then
+      print_string "no deps"
+    else
+      print_string "deps"
+  | _ -> print_string "not yet"
+}
+
+{
+  open Constr
+  open Declarations
+  let testing_function r =
+    let glob_ref = Extraction.locate_global_ref r in
+    let global_env = Global.env () in
+    (* let sigma = Evd.from_env global_env in *)
+    match glob_ref with
+    | ConstRef constname ->
+      print_string "const ref:\n";
+      let cb = Global.lookup_constant constname in
+      begin match cb.const_body with
+        | Def term ->
+          let typ = cb.const_type in
+          let eta_term = Reduction.eta_expand global_env term typ in
+          begin match kind eta_term with
+            | App (hd,args) -> print_string "app"
+            | Ind (indname,u) -> print_string "ind"
+            | Lambda (name,typ,body) -> print_string "lambda"
+            | Prod (name,typ,body) -> print_string "product"
+            | _ -> print_string "other term"
+          end
+        | _ -> print_string "not def'd"
+      end
+    | IndRef indname -> print_string "ind ref\n"
+    | ConstructRef constructname -> print_string "construct ref\n"
+    | VarRef var -> print_string "var ref\n"
+
 }
 
 VERNAC COMMAND EXTEND CakeTranslate CLASSIFIED AS QUERY
 (* Extraction in the Coq toplevel *)
-| [ "Translate" global(x) ] -> { translate_and_print x }
-| [ "TranslateDefine" global(x) ] -> { translate_and_add_to_global_environment x }
-| [ "GenerateInvariant" global(x) ] -> { generate_refinement_invariant x }
+| [ "Testing" global(x) ] -> { testing_function x }
+| [ "Dumb" global(x) ] -> { is_dependent_ref x }
+| [ "PrintTranslation" global(x) ] -> { translate_and_print x }
+| [ "PrintInvariant" global(x) ] -> { print_refinement_invariant x }
+| [ "GenerateInvariant" global(x) ] -> { generate_invariant_and_update_environment x }
 | [ "ClearSemEnv" ] -> { clear_semantic_environment () }
-END
-
-{
-let classify_generate_certificate x =
-  Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]))
-}
-
-VERNAC COMMAND EXTEND InvariateGen CLASSIFIED AS QUERY
-| [ "GenerateInvariantAndUpdate" global(x) ] -> { generate_invariant_and_update_environment x }
-END
-
-VERNAC COMMAND EXTEND CertificateGen CLASSIFIED BY {classify_generate_certificate}
-| ![program_interactive] [ "GenerateCertificate" global(ref) ] -> {generate_certificate_theorem ~ref}
-| ![program_interactive] [ "FinishProgram" string(name) ] -> {generate_decl_certificate_theorem name}
-END
-
-VERNAC COMMAND EXTEND CaseGen CLASSIFIED BY {classify_generate_certificate}
-| ![program_interactive] [ "GenerateMatchLemma" global(ref) ] -> {test_function ~ref}
+| [ "PrintSemEnv"] -> { print_string "TODO\n" }
   END
 
-(* | [ "EndProgram" ] -> { finish_program_and_generate_decs } *)
+{
+  let classify_generate_certificate x =
+    Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]))
+}
+
+VERNAC COMMAND EXTEND CertificateGen CLASSIFIED BY {classify_generate_certificate}
+| ![program_interactive] [ "GenerateMatchLemma" global(ref) ] -> { test_function ~ref }
+| ![program_interactive] [ "GenerateCertificate" global(ref) ] -> { generate_certificate_theorem ~ref }
+| ![program_interactive] [ "FinishProgram" string(name) ] -> { generate_decl_certificate_theorem name }
+END

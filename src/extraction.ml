@@ -21,7 +21,7 @@ let locate_global_ref qid =
 let is_type env term =
   let sigma = Evd.from_env env in
   let sigma', typ  = Typing.type_of env sigma term in
-  isSort sigma' typ
+  isArity sigma' typ
 
 exception UnsupportedFeature of string
 
@@ -238,7 +238,7 @@ let rec translate_ast_t env typ =
       match name with
       | Anonymous -> assert false
       | Name id ->
-        mkApp (get_ast_t_constr "Atvar", [| id |> Names.Id.to_string |> fix_type_name |> str_to_coq_str |])
+        mkApp (get_ast_t_constr "Atvar", [| id |> Names.Id.to_string |> NameManip.cakeml_type_variable_string |> str_to_coq_str |])
     end
 
   | App (hd, args) ->
@@ -259,7 +259,8 @@ let rec translate_ast_t env typ =
     let mut_body = Environ.lookup_mind mut_name env in
     let one_body = mut_body.mind_packets.(type_index) in
     let type_name = one_body.mind_typename |> Names.Id.to_string in
-    mkApp(get_ast_t_constr "Atvar", [| str_to_coq_str type_name |])
+    let short_name = mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str type_name |]) in
+    mkApp (get_ast_t_constr "Atapp", [| list_to_coq_list [] ast_t_type; short_name |])
 
   | Prod (_,_,_) ->
     raise (UnsupportedFeature "Functions as arguments to constructors is unsupported")
@@ -336,6 +337,18 @@ let translate_let_declaration env name term =
 let translate_type_declaration env mut_body =
   mkApp (get_dec_cons "Dtype", [|unknown_loc; translate_type_definition env mut_body|])
 
+let translate_type_synonym env name term typ =
+  let sigma = Evd.from_env env in
+  let normalized_term = Reduction.eta_expand env term typ |> EConstr.of_constr in
+  let i = Termops.nb_lam sigma normalized_term in
+  let (context,end_term) = EConstr.decompose_lam_n_assum sigma i normalized_term in
+  let vars = NameManip.context_to_var_names context |>
+             List.map str_to_coq_str |>
+             (fun x -> list_to_coq_list x string_type)
+  in
+  let ast = translate_ast_t (EConstr.push_rel_context context env) end_term in
+  mkApp (get_dec_cons "Dtabbrev", [| unknown_loc; vars; name; ast |])
+
 let translate_declaration r =
   let glob_ref = locate_global_ref r in
   let global_env = Global.env () in
@@ -345,45 +358,64 @@ let translate_declaration r =
     begin
       match const_body.const_body with
       | Def const ->
+        if is_type global_env (EConstr.of_constr const) then
+          let name = NameManip.id_of_constant const_name |>
+                     Names.Id.to_string |>
+                     NameManip.cakeml_variable_string |>
+                     str_to_coq_str
+          in
+          translate_type_synonym global_env name const const_body.const_type
+        else
         begin
           try translate_let_declaration global_env const_name (EConstr.of_constr const) with
-          | (UnsupportedFeature error) as err -> Feedback.msg_info (Pp.str error); raise err
+          | (UnsupportedFeature error) as err -> (Feedback.msg_info (Pp.str error); raise err)
         end
       | Undef _ -> raise (UnsupportedFeature "Axioms not supported")
       | _ -> Feedback.msg_info (Pp.str "Not a defined constant");
         raise (UnsupportedFeature "translate_declaration: actually an error")
     end
 
-  | IndRef (name,_) | ConstructRef ((name,_),_) ->
+  | IndRef (name,_)  ->
     let mut_body = Environ.lookup_mind name global_env in
     translate_type_declaration global_env mut_body
+
+  | ConstructRef ((name,_),_) ->
+    Feedback.msg_info (Pp.str "Not a constant or inductive type: is a constructor reference");
+    raise (UnsupportedFeature "translate_declaration: actually an error")
 
   | VarRef _ ->
     Feedback.msg_info (Pp.str "Not a constant at all: is a Section variable");
     raise (UnsupportedFeature "translate_declaration: actually an error")
 
 let translate_and_print r =
-  let glob_ref = locate_global_ref r in
-  let global_env = Global.env () in
-  match glob_ref with
-  | ConstRef const_name ->
-    let const_body = Environ.lookup_constant const_name global_env in
-    begin
-     match const_body.const_body with
-      | Def const ->
-        begin
-          try print_econstr (translate_let_declaration global_env const_name (EConstr.of_constr const)) with
-          | UnsupportedFeature error -> Feedback.msg_info (Pp.str error)
-        end
-      | Undef _ -> raise (UnsupportedFeature "Axioms not supported")
-      | _ -> Feedback.msg_info (Pp.str "Not a defined constant")
-   end
+  let dec = translate_declaration r in
+  begin
+    try print_econstr dec with
+    | UnsupportedFeature error -> Feedback.msg_info (Pp.str error)
+  end
 
-  | IndRef (name,_) | ConstructRef ((name,_),_) ->
-    let mut_body = Environ.lookup_mind name global_env in
-    print_econstr (translate_type_definition global_env mut_body)
+(* let translate_and_print r = *)
+(*   let glob_ref = locate_global_ref r in *)
+(*   let global_env = Global.env () in *)
+(*   match glob_ref with *)
+(*   | ConstRef const_name -> *)
+(*     let const_body = Environ.lookup_constant const_name global_env in *)
+(*     begin *)
+(*       match const_body.const_body with *)
+(*       | Def const -> *)
+(*         begin *)
+(*           try print_econstr (translate_let_declaration global_env const_name (EConstr.of_constr const)) with *)
+(*           | UnsupportedFeature error -> Feedback.msg_info (Pp.str error) *)
+(*         end *)
+(*       | Undef _ -> raise (UnsupportedFeature "Axioms not supported") *)
+(*       | _ -> Feedback.msg_info (Pp.str "Not a defined constant") *)
+(*    end *)
 
-  | VarRef _ -> Feedback.msg_info (Pp.str "Not a constant at all: is a Section variable")
+(*   | IndRef (name,_) | ConstructRef ((name,_),_) -> *)
+(*     let mut_body = Environ.lookup_mind name global_env in *)
+(*     print_econstr (translate_type_definition global_env mut_body) *)
+
+(*   | VarRef _ -> Feedback.msg_info (Pp.str "Not a constant at all: is a Section variable") *)
 
 let current_program = ref (list_to_coq_list [] dec_type)
 let reset_current_program () = current_program := list_to_coq_list [] dec_type
@@ -392,52 +424,69 @@ let add_dec_to_current_program dec =
   current_program := mkApp(get_list_constr "cons", [| dec_type; dec; !current_program |])
 
 let translate_and_add_to_global_environment r =
-  let glob_ref = locate_global_ref r in
-  let global_env = Global.env () in
-  match glob_ref with
-  | ConstRef const_name ->
-    let const_body = Environ.lookup_constant const_name global_env in
-    begin
-      match const_body.const_body with
-      | Def const ->
-        begin
-          try let cake_declaration = translate_let_declaration global_env const_name (EConstr.of_constr const) in
-            let dec_type = get_type "CakeSem.CakeAST" "dec" in
-            let name = String.concat "" ["cake_"; const_name |> Names.Constant.label |> Names.Label.to_string  ] in
-            let _ = Declare.declare_definition
-                               ~info:(Declare.Info.make ())
-                               ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string name) ~typ:(Some dec_type) ())
-                               ~opaque:false
-                               ~body:cake_declaration
-                               Evd.empty
-            in
-            let _ = add_dec_to_current_program cake_declaration in
-            ()
+  begin try
+      let dec = translate_declaration r in
+      let name = String.concat "" ["cake_"; Libnames.string_of_qualid r] in
+      let _ = Declare.declare_definition
+          ~info:(Declare.Info.make ())
+          ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string name) ~typ:(Some dec_type) ())
+          ~opaque:false
+          ~body:dec
+          Evd.empty
+      in
+      let _ = add_dec_to_current_program dec in
+      ()
+    with
+    | UnsupportedFeature error -> Feedback.msg_info (Pp.str error)
+  end
 
-          with
-          | UnsupportedFeature error -> Feedback.msg_info (Pp.str error)
-        end
-      | _ -> Feedback.msg_info (Pp.str "Not a defined constant")
-    end
+(* let translate_and_add_to_global_environment r = *)
+(*   let glob_ref = locate_global_ref r in *)
+(*   let global_env = Global.env () in *)
+(*   match glob_ref with *)
+(*   | ConstRef const_name -> *)
+(*     let const_body = Environ.lookup_constant const_name global_env in *)
+(*     begin *)
+(*       match const_body.const_body with *)
+(*       | Def const -> *)
+(*         begin *)
+(*           try let cake_declaration = translate_let_declaration global_env const_name (EConstr.of_constr const) in *)
+(*             let dec_type = get_type "CakeSem.CakeAST" "dec" in *)
+(*             let name = String.concat "" ["cake_"; const_name |> Names.Constant.label |> Names.Label.to_string  ] in *)
+(*             let _ = Declare.declare_definition *)
+(*                                ~info:(Declare.Info.make ()) *)
+(*                                ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string name) ~typ:(Some dec_type) ()) *)
+(*                                ~opaque:false *)
+(*                                ~body:cake_declaration *)
+(*                                Evd.empty *)
+(*             in *)
+(*             let _ = add_dec_to_current_program cake_declaration in *)
+(*             () *)
 
-  | IndRef (name,_) | ConstructRef ((name,_),_) ->
-    begin
-      try
-        let mut_body = Environ.lookup_mind name global_env in
-        let cake_type_def = translate_type_declaration global_env mut_body in
-        let dec_type = get_type "CakeSem.CakeAST" "dec" in
-        let name = String.concat "" ["cake_"; name |> Names.MutInd.label |> Names.Label.to_string  ] in
-        let _ = Declare.declare_definition
-            ~info:(Declare.Info.make ())
-            ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string name) ~typ:(Some dec_type) ())
-            ~opaque:false
-            ~body:cake_type_def
-            Evd.empty
-        in
-        let _ = add_dec_to_current_program cake_type_def in
-        ()
-      with
-      | UnsupportedFeature error -> Feedback.msg_info (Pp.str error)
-    end
+(*           with *)
+(*           | UnsupportedFeature error -> Feedback.msg_info (Pp.str error) *)
+(*         end *)
+(*       | _ -> Feedback.msg_info (Pp.str "Not a defined constant") *)
+(*     end *)
 
-  | VarRef _ -> Feedback.msg_info (Pp.str "Not a constant at all: is a Section variable")
+(*   | IndRef (name,_) | ConstructRef ((name,_),_) -> *)
+(*     begin *)
+(*       try *)
+(*         let mut_body = Environ.lookup_mind name global_env in *)
+(*         let cake_type_def = translate_type_declaration global_env mut_body in *)
+(*         let dec_type = get_type "CakeSem.CakeAST" "dec" in *)
+(*         let name = String.concat "" ["cake_"; name |> Names.MutInd.label |> Names.Label.to_string  ] in *)
+(*         let _ = Declare.declare_definition *)
+(*             ~info:(Declare.Info.make ()) *)
+(*             ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string name) ~typ:(Some dec_type) ()) *)
+(*             ~opaque:false *)
+(*             ~body:cake_type_def *)
+(*             Evd.empty *)
+(*         in *)
+(*         let _ = add_dec_to_current_program cake_type_def in *)
+(*         () *)
+(*       with *)
+(*       | UnsupportedFeature error -> Feedback.msg_info (Pp.str error) *)
+(*     end *)
+
+(*   | VarRef _ -> Feedback.msg_info (Pp.str "Not a constant at all: is a Section variable") *)
