@@ -2,6 +2,7 @@ Require Import CakeSem.SemanticsAux.
 Require Import CakeSem.Evaluate.
 Require Import RefineInv.
 Require Import EvaluateDecsWrapper.
+Require Import EnvWrangling.
 Declare ML Module "coq2cakeml:coq2cakeml.plugin".
 
 Require Export RefineInv.

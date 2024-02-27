@@ -1,65 +1,3 @@
-
-(* Theorem simple_list_cases_inv' : forall (A B : Type) (a_inv : A -> val -> Prop ) (b_inv : B -> val -> Prop) (mat c1 c2 : exp) (b1 : B) (b2 : A -> list A -> B) (l : list A) (orig : B) a_str l'_str env, *)
-(*   orig = match l with [] => b1 | x::xs => b2 x xs end -> *)
-
-(*   (\* needs some way to ensure the environment contains the correct types *\) *)
-(*   good_cons_env [(Pcon (Some (Short "Nil")) [], c1); *)
-(*                  (Pcon (Some (Short "Cons")) [Pvar a_str; Pvar l'_str], c2)] *)
-(*                 env (TypeStamp "" 0) -> *)
-(*   a_str <> l'_str -> *)
-(*   (\* list inv holds for list we are matching on *\) *)
-(*   EVAL env mat (list_INV A a_inv l) -> *)
-(*   (\* b inv holds for the first body of the match  *\) *)
-(*   (l = [] -> EVAL env c1 (b_inv b1)) -> *)
-(*   (\* for any given x : A and xs : list A, if the a inv holds for x for some v and the *\) *)
-(*   (\* list inv holds for xs for some vs, then b inv holds for the second body of the match *\) *)
-(*   (\* applied to x and xs  *\) *)
-(*   (forall (x : A) (xs : list A) (v vs : val), *)
-(*       l = x::xs -> *)
-(*       a_inv x v /\ (list_INV A a_inv xs vs) -> *)
-(*       EVAL *)
-(*         (extend_dec_env (Build_sem_env (nsBind l'_str vs (nsBind a_str v nsEmpty)) nsEmpty) env) *)
-(*         c2 (b_inv (b2 x xs))) -> *)
-
-(*       EVAL env (EMat mat [(Pcon (Some (Short "Nil")) [], c1); *)
-(*                           (Pcon (Some (Short "Cons")) [Pvar a_str; Pvar l'_str], c2)]) *)
-(*                           (b_inv orig). *)
-
-
-(* SHELL *)
-
-(* forall (polymorphic_types* : Type) (res_type : Type) (polymorphic_INV* : polytype -> val -> prop ) (res_INV : res_type -> val -> prop) *)
-(*   (mat : exp) (c_i* : exp) (b_i : depends_on_ctor -> res_type) (x : type_of_mat) (orig : res_type) (pat_strs* : string) (env : sem_env val), *)
-(* orig = match x with *)
-(*        | C_1 => b_1 *)
-(*        | C_2 A_1 .. A_n => b_1 A_1 .. A_n *)
-(*        | C_3 A_1 .. A_m => b_1 A_1 .. A_m *)
-(*        | C_4 A_1 .. A_q => b_1 A_1 .. A_q *)
-(*            .. *)
-(*        end -> *)
-
-(* good_cons_env  [(Pcon (Some (Short "CakeConsName1") []), c_1) *)
-(*                 (Pcon (Some (Short "CakeConsName2") [Pvar pat_str_1; .. Pvar pat_str_n]), c_2) *)
-(*                 .. *)
-(*                 (Pcon (Some (Short "CakeConsNamer") [Pvar pat_str_1; .. Pvar pat_str_m]), c_r) ] *)
-(*               env (TypeStamp "" ??) -> *)
-
-(* EVAL env mat (type_INV polymorphic_types polymorphic_INV x) -> *)
-
-(* (x = C1 -> EVAL env c_1 (res_INV b_1)) -> *)
-(* .. *)
-(* (forall a_1 .. a_n v_1 .. v_n, x = Cr a_1 .. a_n -> *)
-(*  a_1_INV a_1 v1 /\ ... /\ a_n_INV a_n v_n -> *)
-(*  EVAL (extend_dec_env (Build_sem_env (nsBind pat_str_n v_n (nsBind pat_str_n-1 v_n-1 (... (nsBind pat_str_1 v_1)) nsEmpty))) env)) c_r (res_INV (b_r a_1 .. a_n)) -> *)
-
-(* EVAL env (EMat mat [(Pcon (Some (Short "CakeConsName1") []), c_1) *)
-(*                       (Pcon (Some (Short "CakeConsName2") [Pvar pat_str_1; .. Pvar pat_str_n]), c_2) *)
-(*                       .. *)
-(*                       (Pcon (Some (Short "CakeConsNamer") [Pvar pat_str_1; .. Pvar pat_str_m]), c_r) ] *)
-(*             (res_INV orig) *)
-
-(* open TermGen *)
-(* open TypeGen *)
 open EConstr
 
 (* used to calculate what number parameter a specific rel variable within a constructor definition has *)
@@ -121,10 +59,10 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
     | Rel i -> mkVar (param_name (nargs + num_params - arg_index - i - 1))
     | App (hd,args) -> mkApp (convert_rel_to_named nargs arg_index hd, Array.map (convert_rel_to_named nargs arg_index) args)
     | Ind (name,_) -> typ
+    | Const _ -> typ
     | Prod _ -> raise (Extraction.UnsupportedFeature "convert_rel_to_named: Prod not implemented")
     | Lambda _ -> raise (Extraction.UnsupportedFeature "convert_rel_to_named: Lambda not implemented")
     | LetIn _ -> raise (Extraction.UnsupportedFeature "convert_rel_to_named: LetIn not implemented")
-    | Const _ -> raise (Extraction.UnsupportedFeature "convert_rel_to_named: Constant not implemented")
     | Var _ -> raise (Extraction.UnsupportedFeature "convert_rel_to_named: Var not implemented")
     | Construct _ -> raise (Extraction.UnsupportedFeature "convert_rel_to_named: Constructor not implemented")
     | Case _ -> raise (Extraction.UnsupportedFeature "convert_rel_to_named: Case not implemented")
@@ -219,13 +157,6 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
   let type_stamp = mkApp (TermGen.get_stamp_constr "TypeStamp", [| TermGen.str_to_coq_str ""; TermGen.get_nat_constr "O" |]) in
   let good_cons_env_prop = mkApp (TermGen.mk_good_cons_env, [| cake_list_pats; mkVar env_name; type_stamp |]) in
 
-  (* NoDup [pat_str_1;...;pat_str_n-1] *)
-  let no_dup_prop = Smartlocate.global_inductive_with_alias (Libnames.qualid_of_string "List.NoDup") in
-  let list_of_pat_names = List.concat pat_str_names |> List.map mkVar |> fun x -> TermGen.list_to_coq_list x TypeGen.string_type in
-  let no_dup_pat_strs_prop = mkApp (mkInd no_dup_prop, [| TypeGen.string_type; list_of_pat_names |]) in
-
-  (* EVAL env mat (type_INV polymorphic_types polymorphic_INV x) *)
-
   let eval_term = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "RefineInv.EVAL") in
   let mkEVAL cake_env exp inv = mkApp(mkConst eval_term,[|cake_env; exp; inv|]) in
 
@@ -278,6 +209,13 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
         end
       | App (hd,args) -> mkApp (mk_inv hd arg_index, Array.append (Array.map (convert_rel_to_named num_constructor_args arg_index) args) (Array.map (fun t -> mk_inv t arg_index) args) )
 
+      | Const (const_name,_) ->
+        let inv_id = NameManip.constant_inv_name const_name in
+        begin
+          try mkConst (Nametab.locate_constant (Libnames.qualid_of_ident inv_id))
+          with Not_found -> raise (InvGen.GenEx (String.concat "" [Names.Id.to_string inv_id; " was not found in the current environment"]))
+        end
+
       | _ -> raise (InvGen.GenEx "messed up or an error: unclear yet")
     in
 
@@ -329,7 +267,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   (* Putting all the propositions together *)
 
-  let final_prop = List.fold_right mkArrowR (equiv_prop::good_cons_env_prop::no_dup_pat_strs_prop::eval_prop::constructor_hyps) conc_prop in
+  let final_prop = List.fold_right mkArrowR (equiv_prop::good_cons_env_prop::eval_prop::constructor_hyps) conc_prop in
 
   (* All final substitutions *)
   let env_subst = Vars.subst_var sigma env_name final_prop in
@@ -364,12 +302,10 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
       (List.combine (List.map (fun id -> Name id |> Context.annotR) result_and_params)
          (List.init (List.length result_and_params) (fun _ -> result_type)) |> List.rev) in
 
-  (* PrintDebug.print_econstr param_result_prod; *)
   param_result_prod
-  (* print_endline (PrintDebug.print_constr_shape (EConstr.to_constr sigma param_result_prod)) *)
 
 
-let test_function ~pm ~ref =
+let generate_match_theorem ~pm ~ref =
   let glob_ref = Extraction.locate_global_ref ref in
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
@@ -380,14 +316,8 @@ let test_function ~pm ~ref =
     let sigma', declaration_type = Typing.type_of ~refresh:true global_env sigma case_theorem in
     let open Declare in
     let pm = OblState.empty in
-    (* let sigma'', evar =  Evarutil.new_evar global_env sigma' case_theorem in *)
-    (* let cinfo = CInfo.make ~name:theorem_name ~typ:(EConstr.to_constr sigma'' case_theorem) () in *)
     let cinfo' = CInfo.make ~name:theorem_name ~typ:case_theorem () in
     let info = Info.make () in
-    (* let obls_info,_,term,_ = RetrieveObl.retrieve_obligations global_env theorem_name sigma'' 0 evar case_theorem in *)
-    (* let pm,prog = Obls.add_definition ~pm ~cinfo ~term ~info ~uctx:(Evd.evar_universe_context sigma'') ~opaque:false obls_info in *)
     pm, Declare.Proof.start ~info ~cinfo:cinfo' sigma'
 
   | _ -> raise (Extraction.UnsupportedFeature "must be a reference to constructor or inductive type")
-
-let generate_case_theorem i d k = ()

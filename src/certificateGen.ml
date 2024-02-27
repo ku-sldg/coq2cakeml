@@ -8,7 +8,7 @@ open TermGen
 
 let eval_dec decs env =
   let eval_decs_wrapper = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "EvaluateDecsWrapper.eval_decs_wrapper") in
-  mkApp (mkConst eval_decs_wrapper, [| init_state; env; TermGen.list_to_coq_list decs TypeGen.dec_type |])
+  mkApp (mkConst eval_decs_wrapper, [| mk_init_state; env; TermGen.list_to_coq_list decs TypeGen.dec_type |])
 
 let create_certificate_theorem env cake_env term =
   let sigma = Evd.from_env env in
@@ -23,36 +23,111 @@ let create_certificate_theorem env cake_env term =
   it_mkProd_or_LetIn (mkEVAL cake_env exp decl') prods'
 
 (* Definition DECL (st : state ST) (env : sem_env val) (decs : list dec) (st' : state ST) (env' : sem_env val) *)
-let create_decl_certificate_theorem start_st start_env =
+let create_decl_certificate_theorem start_st start_env final_st final_env =
   let decl_constant = mkConst (Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "DECL")) in
   let rev_constant = mkConst (Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "rev")) in
   mkApp (decl_constant,
          [| start_st; start_env;
             mkApp (rev_constant, [| TypeGen.dec_type; !current_program |]);
-            !current_cake_st; !current_cake_env |])
+            final_st; final_env |])
 
-let generate_invariant_and_update_environment ref =
+let curr_env_name = ref "cake_env"
+let next_env_num = ref 0
+let curr_st_num = ref 0
+
+let _ = Declare.declare_definition
+    ~info:(Declare.Info.make ())
+    ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string !curr_env_name) ~typ:(Some (TypeGen.sem_env_type TypeGen.val_type)) ())
+    ~opaque:false
+    ~body:mk_empty_sem_env
+    (Evd.from_env (Global.env ()))
+
+let mk_updated_environment ref cake_env_constant =
   let glob_ref = locate_global_ref ref in
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
   match glob_ref with
+  | IndRef (mut_name,index) ->
+    let mut_body = Environ.lookup_mind mut_name global_env in
+    let one_body = mut_body.mind_packets.(0) in
+
+    let cons_names = one_body.mind_consnames in
+    let cons_num_args = one_body.mind_consnrealargs in
+
+    let open NameManip in
+    let open TypeGen in
+    let cake_cons_names = Array.map (fun name -> id_string_map name NameManip.cakeml_constructor_string |>
+                                                 Names.Id.to_string |> str_to_coq_str) cons_names in
+    let stamps =
+      Array.map (fun name -> mkApp (get_stamp_constr "TypeStamp", [|name; get_nat_constr "O"|])) cake_cons_names
+    in
+
+    let cake_args = Array.map int_to_coq_nat cons_num_args in
+    let nat_stamp_pairs = Array.map2 (fun x y -> pair_to_coq_pair (x,y) nat_type stamp_type)
+        cake_args stamps
+    in
+
+    let cs = Array.map2 (fun x y -> pair_to_coq_pair (x,y) string_type (prod_type nat_type stamp_type))
+        cake_cons_names nat_stamp_pairs |>
+             Array.to_list |>
+             List.rev |>
+             (fun x -> list_to_coq_list x (prod_type string_type (prod_type nat_type stamp_type)))
+    in
+    mk_write_c_list cs cake_env_constant
+
+  | ConstRef cname ->
+    let body = Global.lookup_constant cname in
+    let const_type = EConstr.of_constr body.const_type in
+    let open NameManip in
+    if isArity sigma const_type then cake_env_constant
+    else
+      let cake_name = id_of_constant cname |>
+                      Names.Id.to_string |>
+                      cakeml_variable_string |>
+                      str_to_coq_str
+      in
+      let ebody =
+        match body.const_body with
+        | Def ebody -> ebody
+        | _ -> raise (GenEx "update_environment: term to translate must be Defined and/or Transparent")
+      in
+      let e = translate_term global_env (EConstr.of_constr ebody) in
+      let cake_val = mkApp (get_constant "EvaluateDecsWrapper" "wrapped_eval", [|e; cake_env_constant|]) in
+      mk_write_v cake_name cake_val cake_env_constant
+
+  | _ -> raise (GenEx "update_environment: not supported")
+
+let update_environment ref =
+  let global_env = Global.env () in
+  let sigma = Evd.from_env global_env in
+  let new_env = mk_updated_environment ref (get_constant "" !curr_env_name) in
+
+  curr_env_name := String.concat "" ["cake_env"; string_of_int !next_env_num];
+  next_env_num := !next_env_num + 1;
+
+  let _ = Declare.declare_definition
+            ~info:(Declare.Info.make ())
+            ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string !curr_env_name) ~typ:(Some (TypeGen.sem_env_type TypeGen.val_type)) ())
+            ~opaque:false
+            ~body:new_env
+            sigma
+  in ()
+
+let generate_invariant_and_update_environment ref =
+  let glob_ref = locate_global_ref ref in
+  match glob_ref with
   | IndRef _ ->
     InvGen.generate_refinement_invariant ref;
     let cake_dec = translate_declaration ref in
-    let _ = add_dec_to_current_program cake_dec in
-    let eval_dec_term = eval_dec [cake_dec] !current_cake_env in
-    let res = Reductionops.nf_all global_env sigma eval_dec_term in
-    current_cake_env := Reductionops.nf_all global_env sigma (apply_extend_dec_env (coq_snd sigma res) !current_cake_env);
-    current_cake_st := (coq_fst sigma res)
+    add_dec_to_current_program cake_dec;
+    curr_st_num := !curr_st_num + 1;
+    update_environment ref
 
   | ConstRef _ ->
     InvGen.generate_refinement_invariant ref;
     let cake_dec = translate_declaration ref in
-    let _ = add_dec_to_current_program cake_dec in
-    let eval_dec_term = eval_dec [cake_dec] !current_cake_env in
-    let res = Reductionops.nf_all global_env sigma eval_dec_term in
-    current_cake_env := Reductionops.nf_all global_env sigma (apply_extend_dec_env (coq_snd sigma res) !current_cake_env);
-    current_cake_st := (coq_fst sigma res)
+    add_dec_to_current_program cake_dec;
+    update_environment ref
 
   | _ -> raise (UnsupportedFeature "must be a reference to an inductive type")
 
@@ -61,46 +136,40 @@ let generate_certificate_theorem ~pm ~ref =
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
   let cake_dec = translate_declaration ref in
-  let eval_dec_term = eval_dec [cake_dec] !current_cake_env in
-    let res = Reductionops.nf_all global_env sigma eval_dec_term in
-    let old_cake_env = !current_cake_env in
-    let extended_env = apply_extend_dec_env (coq_snd sigma res) !current_cake_env in
-    (* PrintDebug.print_econstr extended_env; *)
-    let _ = add_dec_to_current_program cake_dec in
-    current_cake_env := Reductionops.nf_all global_env sigma extended_env;
-    match glob_ref with
-    | ConstRef const_name ->
-      let x = Environ.lookup_constant const_name global_env in
-      let certificate = begin
-        match x.const_body with
-        | Def const ->
-          create_certificate_theorem global_env old_cake_env (EConstr.of_constr const);
-        | Undef _ -> raise (UnsupportedFeature "Axioms not supported")
-        | _ -> raise (UnsupportedFeature "not doing this part right now")
-      end in
-      let certificate_theorem_name =
-        const_name |> Names.Constant.label |> Names.Label.to_id
-        |> Nameops.add_prefix "cake_" |> fun x -> Nameops.add_suffix x "_certificate_thm" in
-      let sigma', declaration_type = Typing.type_of ~refresh:true global_env sigma certificate in
+  let _ = add_dec_to_current_program cake_dec in
+  let prev_env_name = !curr_env_name in
+  update_environment ref;
+  match glob_ref with
+  | ConstRef const_name ->
+    let x = Environ.lookup_constant const_name global_env in
+    let certificate = begin
+      match x.const_body with
+      | Def const ->
+        create_certificate_theorem global_env (get_constant "" prev_env_name) (EConstr.of_constr const)
+      | Undef _ -> raise (UnsupportedFeature "Axioms not supported")
+      | _ -> raise (UnsupportedFeature "not doing this part right now")
+    end in
+    let certificate_theorem_name =
+      const_name |> Names.Constant.label |> Names.Label.to_id
+      |> Nameops.add_prefix "cake_" |> fun x -> Nameops.add_suffix x "_certificate_thm" in
+    let sigma', declaration_type = Typing.type_of ~refresh:true global_env sigma certificate in
 
-      let open Declare in
-      let pm = OblState.empty in
-      (* let sigma'', evar =  Evarutil.new_evar global_env sigma' certificate in *)
-      (* let cinfo = CInfo.make ~name:certificate_theorem_name ~typ:(EConstr.to_constr sigma'' certificate) () in *)
-      let cinfo' = CInfo.make ~name:certificate_theorem_name ~typ:certificate () in
-      let info = Info.make () in
-      (* let obls_info,_,term,_ = RetrieveObl.retrieve_obligations global_env certificate_theorem_name sigma'' 0 evar certificate in *)
-      (* let pm,prog = Obls.add_definition ~pm ~cinfo ~term ~info ~uctx:(Evd.evar_universe_context sigma'') ~opaque:false obls_info in *)
-      pm, Declare.Proof.start ~info ~cinfo:cinfo' sigma'
+    let open Declare in
+    let pm = OblState.empty in
+    let cinfo' = CInfo.make ~name:certificate_theorem_name ~typ:certificate () in
+    let info = Info.make () in
+    pm, Declare.Proof.start ~info ~cinfo:cinfo' sigma'
 
-    (* | IndRef (mut_name,_) | ConstructRef ((mut_name,_),_) -> *)
-    | _ -> raise (UnsupportedFeature "need to come back here")
+  | _ -> raise (UnsupportedFeature "need to come back here")
 
 let generate_decl_certificate_theorem ~pm prog_name =
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
 
-  let certificate = create_decl_certificate_theorem init_state (mkApp (mkConst empty_sem_env, [| TypeGen.val_type |])) in
+  let certificate = create_decl_certificate_theorem mk_init_state mk_empty_sem_env
+      (mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [|TypeGen.nat_type; mk_init_state; int_to_coq_nat !curr_st_num|]))
+
+      (get_constant "" !curr_env_name)in
   let certificate_theorem_name = Nameops.add_prefix "cake_prog_" (Nameops.add_suffix (Names.Id.of_string prog_name) "_certificate_thm") in
 
   let sigma', declaration_type = Typing.type_of ~refresh:true global_env sigma certificate in

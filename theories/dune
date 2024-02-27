@@ -1,4 +1,5 @@
 (coq.theory
  (name CakeMLExtraction)
  (package coq2cakeml)
- (libraries coq2cakeml.plugin))
+ (libraries coq2cakeml.plugin)
+ (modules (:standard \ MapExample tjsoopsie)))

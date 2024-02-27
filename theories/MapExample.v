@@ -14,97 +14,26 @@ Require Import Strings.String.
 Open Scope string_scope.
 
 Require Import ExampleInv.
+Require Import Tactics.
+
+Require Import Extraction.
 
 PrintInvariant list.
 GenerateInvariant list.
 GenerateMatchLemma list.
-  intros.
-  destruct matched;
-    unfold EVAL in *; unfold evaluate in *.
-  - intros.
-    specialize (H2 st).
-    destruct H2 as [v [f [st' [H2 H2']]]].
-    clear H4.
-    inv H2'.
-    simp eval_or_match in H3.
-    assert (@nil PARAM0 = []) by reflexivity.
-    specialize (H3 H st').
-    destruct H3 as [v [f0 [st'0 [H3 H3']]]].
-    clear H.
-    exists v.
-    exists (list_max [f;f0]).
-    exists st'0.
-    simp eval_or_match; simpl.
-    apply (use_maximum_fuel _ [f;f0] _) in H2; simpl in H2.
-    rewrite H2. simpl.
-    simp eval_or_match; simpl.
-    simp pmatch; simpl.
-    unfold good_cons_env in H0.
-    inv H0.
-    destruct H5 as [con_name [ps [ty [H51 [H52 [H53 H54]]]]]].
-    inv H51.
-    rewrite H53.
-    simpl in H54.
-    rewrite PeanoNat.Nat.eqb_eq in H54.
-    subst.
-    simpl.
-    apply (use_maximum_fuel _ [f;f0] _) in H3; simpl in H3; unfold list_max in H3.
-    split.
-    rewrite <- sem_env_id.
-    unfold extend_dec_env in H3; simpl in H3.
-    rewrite <- sem_env_id in H3.
-    apply H3.
-    assumption.
-    unfold list_max; simpl; lia.
-    unfold list_max; simpl; lia.
-  - unfold evaluate in *. intros.
-    specialize (H2 st).
-    destruct H2 as [v [f [st' [H2 H2']]]].
-    clear H3.
-    inv H2'.
-    simp eval_or_match in H4.
-    assert (p::matched = p::matched) by reflexivity.
-    destruct H3 as [v1 [H31 [H32 H33]]].
-    specialize (H4 p matched x v1 H H32 H33 st').
-    clear H.
-    destruct H4 as [v' [f0 [st'0 [H4 H4']]]].
-    exists v'.
-    exists (list_max [f;f0]).
-    exists st'0.
-    simp eval_or_match; simpl.
-    apply (use_maximum_fuel _ [f;f0] _) in H2; simpl in H2; try (simpl;lia).
-    rewrite H2. simpl.
-    simp eval_or_match; simpl.
-    unfold good_cons_env in H0.
-    inv H0; clear H0.
-    simp pmatch; simpl.
-    inv H6.
-    clear H6 H7.
-    destruct H3 as [con_name [ps [ty [H3' [H3_nodup [H3_lookup H3_stamp]]]]]].
-    destruct H5 as [con_name' [ps' [ty' [H5' [H5_nodup [H5_lookup H5_stamp]]]]]].
-    inv H3'. inv H5'.
-    rewrite H5_lookup.
-    simpl.
-    simpl in H5_stamp.
-    rewrite PeanoNat.Nat.eqb_eq in H5_stamp. rewrite H5_stamp; simpl.
-    destruct (string_eq_dec pat_str1 pat_str0).
-    subst.
-    inv H1.
-    assert (In pat_str0 [pat_str0]) by (constructor; reflexivity).
-    contradiction.
-    rewrite <- String.eqb_neq in n.
-    rewrite n; simpl.
-    rewrite H3_lookup; simpl.
-    inv H3_stamp.
-    rewrite PeanoNat.Nat.eqb_eq in H0.
-    subst. simpl.
-    simp pmatch; simpl.
-    split.
-    unfold nsBind, extend_dec_env in H4; simpl in H4.
-    apply more_fuel_same_value with f0.
-    lia.
-    apply H4.
-    assumption.
+Proof.
+  my_intros.
+  handle_matched.
+  destruct matched; destruct_inv Hinv_match.
+  - solve_case Hcase (@nil val) matched_st.
+    repeat normalize_fuels [matched_f; case_f].
+    repeat handle_good_cons.
+    final_solve.
+
+  - solve_case Hcase0 [match_arg_v; match_arg_v0] matched_st.
+    repeat normalize_fuels [matched_f; case_f].
+    repeat handle_good_cons.
+    final_solve.
 Qed.
 
 Theorem EVAL_ECon_list_nil :
@@ -178,7 +107,6 @@ Obligations.
       apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(map f l)) [].
       + reflexivity.
       + good_cons_env_solve.
-      + NoDup_solve.
       + apply EVAL_EVar with u; try reflexivity; try assumption.
       + intro.
         eapply EVAL_ECon_list_nil.
@@ -189,7 +117,6 @@ Obligations.
       apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(map f l)) (a::x).
       + reflexivity.
       + good_cons_env_solve.
-      + NoDup_solve.
       + eapply EVAL_EVar; try reflexivity; try assumption.
       + intro contra. inv contra.
       + intros.

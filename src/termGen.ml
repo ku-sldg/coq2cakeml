@@ -3,8 +3,8 @@ open EConstr
 open TypeGen
 
 let get_constructor module_name type_name constructor_name =
-  let const_qualid = Libnames.qualid_of_string (if module_name != ""
-                                                then (String.concat "." [module_name; constructor_name])
+  let const_qualid = Libnames.qualid_of_string (if module_name <> ""
+                                                then String.concat "." [module_name; constructor_name]
                                                 else constructor_name)
   in
   let constr = Smartlocate.global_constructor_with_alias const_qualid in
@@ -39,6 +39,12 @@ let get_dec_cons cname = get_constructor "CakeAST" "dec" cname
 let get_stamp_constr cname = get_constructor "SemanticsAux" "stamp" cname
 
 let get_val_constr cname = get_constructor "SemanticsAux" "val" cname
+
+let int_to_coq_nat i =
+  let zero = get_nat_constr "O" in
+  let succ = get_nat_constr "S" in
+  if i <= 0 then zero
+  else iterate (fun n -> mkApp (succ,[|n|])) i zero
 
 let char_to_coq_ascii char =
   let ascii_const = get_constructor "Strings.Ascii" "ascii" "Ascii" in
@@ -98,8 +104,8 @@ let get_eq_refl typ t1 t2 =
   mkApp (get_constructor "" "eq" "eq_refl", [|typ; t1; t2|])
 
 let get_constant module_name identifier_name =
-  let const_qualid = Libnames.qualid_of_string (if module_name != ""
-                                                then (String.concat "." [module_name; identifier_name])
+  let const_qualid = Libnames.qualid_of_string (if module_name <> ""
+                                                then String.concat "." [module_name; identifier_name]
                                                 else identifier_name)
   in
   let constant = Smartlocate.global_constant_with_alias const_qualid in
@@ -114,8 +120,16 @@ let mk_good_cons_env = get_constant "RefineInv" "good_cons_env"
 
 let unknown_loc = list_to_coq_list [] nat_type
 
-let func_inv = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "RefineInv.FUNC")
-let mkFUNC typ1 typ2 inv1 inv2 = mkApp(mkConst func_inv,[|typ1; typ2; inv1; inv2|])
+let mkFUNC typ1 typ2 inv1 inv2 = mkApp(get_constant "RefineInv" "FUNC",[|typ1; typ2; inv1; inv2|])
 
-let eval_term = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "RefineInv.EVAL")
-let mkEVAL cake_env exp inv = mkApp(mkConst eval_term,[|cake_env; exp; inv|])
+let mkEVAL cake_env exp inv = mkApp(get_constant "RefineInv" "EVAL",[|cake_env; exp; inv|])
+
+let mk_write_v name v env = mkApp(get_constant "EnvWrangling" "write_v", [|name; v; env|])
+
+let mk_write_c name c env = mkApp(get_constant "EnvWrangling" "write_c", [|name; c; env|])
+
+let mk_merge_envs env1 env2 = mkApp(get_constant "EnvWrangling" "merge_envs", [|env1; env2|])
+
+let mk_write_rec funs cl_env env = mkApp(get_constant "EnvWrangling" "write_rec", [|funs; cl_env; env|])
+
+let mk_write_c_list cs env = mkApp(get_constant "EnvWrangling" "write_c_list", [|cs; env|])

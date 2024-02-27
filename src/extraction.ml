@@ -253,13 +253,28 @@ let rec translate_ast_t env typ =
 
       mkApp (get_ast_t_constr "Atapp", [| type_args |> Array.to_list |> (fun x -> list_to_coq_list x ast_t_type);
                                           head |])
-    else assert false
+    else if isConst sigma hd then
+      let (const_name,_) = destConst sigma hd in
+      let head_str = NameManip.id_of_constant const_name |> Names.Id.to_string in
+      let head = mkApp(get_ident_constr "Short", [| string_type; string_type; str_to_coq_str head_str |]) in
+      let type_args = Array.map (translate_ast_t env) args in
+
+      mkApp (get_ast_t_constr "Atapp", [| type_args |> Array.to_list |> (fun x -> list_to_coq_list x ast_t_type);
+                                          head |])
+
+    else
+      assert false
 
   | Ind ((mut_name,type_index),_) ->
     let mut_body = Environ.lookup_mind mut_name env in
     let one_body = mut_body.mind_packets.(type_index) in
     let type_name = one_body.mind_typename |> Names.Id.to_string in
     let short_name = mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str type_name |]) in
+    mkApp (get_ast_t_constr "Atapp", [| list_to_coq_list [] ast_t_type; short_name |])
+
+  | Const (constname,_) ->
+    let const_str = NameManip.id_of_constant constname |> Names.Id.to_string in
+    let short_name = mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str const_str |]) in
     mkApp (get_ast_t_constr "Atapp", [| list_to_coq_list [] ast_t_type; short_name |])
 
   | Prod (_,_,_) ->

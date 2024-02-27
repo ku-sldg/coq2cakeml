@@ -127,6 +127,10 @@ Proof.
   constructor.
 Qed.
 
+
+
+
+
 (* Theorem EVAL_ELetrec_Fun {A B : Type} (env : sem_env val) (AINV : A -> val -> Prop) (BINV : B -> val -> Prop) (f : A -> B) (fname var : varN) (body : exp) : *)
 (*   (forall (x : A) (v : val), AINV x v -> EVAL (bind_variable_name var v env) body (BINV (f x))) -> *)
 (*   EVAL env (ELetrec [(fname,var,body)] (EVar (Short fname))) ((FUNC AINV BINV) f). *)
@@ -1006,4 +1010,27 @@ Proof.
   inv HELetrec; clear HELetrec; simpl in *.
   rewrite H0; simpl.
   reflexivity.
+Qed.
+
+(* similar to the previous theorem but used for references to non-recusive functions *)
+Theorem EVAL_EFun_EVAL_EVar : forall A env' env name var body (AINV : A -> val -> Prop) (f : A),
+    EVAL env (EFun var body) (AINV f) ->
+    nsLookup ident_string_beq (Short name) (sev env') =
+      Some (Closure env var body) ->
+    EVAL env' (EVar (Short name)) (AINV f).
+Proof.
+  intros A env' env name var body AINV f Hfun Hlookup st.
+  specialize (Hfun st).
+  destruct Hfun as [v_fun [f_fun [st_fun [Heval_fun HAINVv_fun]]]].
+  repeat eexists.
+  - unfold evaluate.
+    simp eval_or_match in *.
+    rewrite Hlookup; simpl.
+    reflexivity.
+  - unfold evaluate in Heval_fun.
+    simp eval_or_match in Heval_fun.
+    inv Heval_fun.
+    assumption.
+    Unshelve.
+    constructor.
 Qed.

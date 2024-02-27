@@ -2,7 +2,7 @@ open Extraction
 open EConstr
 open NameManip
 open TermGen
-open Hipattern
+(* open Hipattern *) (* provides dependency checks (maybe) *)
 
 exception Unimplemented of string
 exception GenEx of string
@@ -26,6 +26,7 @@ exception GenEx of string
 let refinement_invariant env name =
   let open Declarations in
   let mut_body = Environ.lookup_mind name env in
+  let is_recursive = mut_body.mind_finite <> BiFinite in
   let one_body = mut_body.mind_packets.(0) in
   let params = mut_body.mind_params_ctxt |> of_rel_context in
 
@@ -44,7 +45,6 @@ let refinement_invariant env name =
   let params_and_invs = invs @ params in
   let env' = push_rel_context params_and_invs env in
   let sigma = Evd.from_env env' in
-
 
   let init_args = fun body -> it_mkLambda_or_LetIn body params_and_invs in
 
@@ -68,13 +68,15 @@ let refinement_invariant env name =
   let env'' = push_rel (Context.Rel.Declaration.LocalAssum(Context.map_annot Names.Name.mk_name val_name, TypeGen.val_type)) env'' in
   let sigma = Evd.from_env env'' in
 
-  let offset = 3 in (* to be used later in the case that the function is not recursive *)
+  let offset = if is_recursive then 3 else 2 in (* to be used later in the case that the function is not recursive *)
 
   let rec mk_type nargs index typ =
+    (* Q: What are we doing here? *)
+    (* A: moving the variable arguments of a type 'up' with respect to the amount of arguments to some outside function (?) *)
     match kind sigma typ with
     | Rel i -> mkRel (2 * nargs + offset + nparams + i + index - 1)
     | App (hd,args) -> mkApp (mk_type nargs index hd, Array.map (mk_type nargs index) args)
-    | Ind (name,_) -> typ
+    | Ind _ | Const _ -> typ
     | _ -> raise (GenEx "refinement_invariant: TJ FIX ME PWEAAAAASE")
   in
 
@@ -116,8 +118,12 @@ let refinement_invariant env name =
           Array.map (mk_inv nargs index) args
       in
       mkApp (inv, Array.append params invs)
-    | Const (name,univ) -> raise (Unimplemented "I WAS A CONST THE WHOLE TIME YOU BITCH")
-    | _ ->  raise (Unimplemented "mkbranch: funny business, TJ fix ur shit")
+
+    | Const (name,univ) ->
+      let inv_id = NameManip.constant_inv_name name in
+      mkConst (Libnames.qualid_of_ident inv_id |> Smartlocate.global_constant_with_alias)
+
+    | _ ->  raise (Unimplemented "mkinv: funny business, TJ fix ur 'things'")
   in
 
   let rec combine_invs invs =
@@ -169,7 +175,7 @@ let refinement_invariant env name =
 
   let open Inductiveops in
   let ind_type = make_ind_type (make_ind_family (Univ.in_punivs (name,0), Array.init mut_body.mind_nparams (fun i -> Constr.mkRel (2 * mut_body.mind_nparams - i + offset)) |> Array.to_list), []) in
-  let case_info = make_case_info env (name,0) Sorts.Relevant Constr.RegularStyle in (* might switch case style once branches are properly instantiated *)
+  let case_info = make_case_info env (name,0) Sorts.Relevant Constr.RegularStyle in (* might switch case style once branches are properly instantiated *) (* lol no *)
   let return =  EConstr.mkLambda (Context.anonR, Vars.lift 2 decreasing_arg_type, EConstr.mkProp) in
 
   let consargs = Array.map fst one_body.mind_nf_lc |> Array.map EConstr.of_rel_context in
@@ -178,10 +184,14 @@ let refinement_invariant env name =
 
   let match_exp = make_case_or_project env (Evd.from_env env) ind_type case_info return (EConstr.mkRel 2) branches in
 
-
   let func_hd = fun body -> (init_args (fix body)) in
 
-  func_hd match_exp
+  if is_recursive then
+    func_hd match_exp
+  else
+    init_args (fix_body match_exp)
+
+(* my naming conventions are uber trash *)
 
 (* Convert Debruijn numbers to named variables when applicable *)
 let rec rels_to_vars env typ =
@@ -197,12 +207,14 @@ let rec rels_to_vars env typ =
     mkProd (name,typ'',body')
   | App (hd,args) -> mkApp (rels_to_vars env hd, Array.map (rels_to_vars env) args)
   | Ind _ -> typ
+  | Const _ -> typ
   | _ -> PrintDebug.ps "rels_to_vars : not specifically implemented yet"; typ
 
 let rec invariant_from_type env typ =
   let open Context.Rel.Declaration in
   let open Names in
   let sigma = Evd.from_env env in
+  (* let eta_typ = Reductionops.shrink_eta sigma typ in *)
   match kind sigma typ with
   (* possible dependent heuristic is if a rel points to something that is NOT a sort *)
   | Rel i ->
@@ -258,18 +270,44 @@ let rec invariant_from_type env typ =
     let inv_id = NameManip.constant_inv_name constname in
     mkConst (Libnames.qualid_of_ident inv_id |> Smartlocate.global_constant_with_alias)
 
+  | Lambda _ ->
+    let sigma = Evd.from_env env in
+    let ctxt,body = EConstr.decompose_lam sigma typ in
+
+    let env' = EConstr.push_rel_context (List.map (fun (x,y) -> LocalAssum (x,y)) ctxt) env in
+
+    let inv_body = invariant_from_type env' body in
+
+    let arb_inv_type = fun x -> mkArrowR x (mkArrowR (TypeGen.val_type) mkProp) in
+
+    let param_names = List.map fst ctxt in
+    let param_inv_names = List.map (fun name ->
+        let open Context in
+        name.binder_name |>
+        id_of_name ~anon:"ANON" |>
+        (fun id -> Nameops.add_suffix id "_INV") |>
+        fun x -> Names.Name.Name x |> annotR) param_names
+    in
+
+    let param_and_inv_names = List.map (fun x -> Context.(x.binder_name) |> id_of_name) (param_inv_names @ param_names) in
+    let inv_body' = Vars.subst_vars sigma param_and_inv_names inv_body in
+
+    let context =
+      let len = List.length ctxt in
+      (List.map (fun n -> (n, arb_inv_type (mkRel len)) )param_inv_names) @ ctxt
+    in
+    it_mkLambda inv_body' context
+
   | Var name -> raise (UnsupportedFeature "invariant_from_type : havent done var")
 
   | Sort sort -> raise (UnsupportedFeature "invariant_from_type : havent done sort")
 
-  | Lambda _ -> raise (UnsupportedFeature "invariant_from_type : havent done lambda")
-
   | Case _ -> raise (UnsupportedFeature "invariant_from_type : havent done case")
-
 
   | _ -> raise (UnsupportedFeature "invariant_from_type : haven't done yet")
 
 let generate_refinement_invariant r =
+  print_string "testglob\n";
   let glob_ref = locate_global_ref r in
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
@@ -306,7 +344,7 @@ let generate_refinement_invariant r =
         in
         ()
       | _ -> raise (UnsupportedFeature "only handling defined, transparent references")
-    else raise (GenEx "Constant reference must be doing something")
+    else raise (GenEx "Constant reference must be an arity")
   | _ -> raise (GenEx "Not an inductive type reference")
 
 let print_refinement_invariant r =
@@ -323,10 +361,9 @@ let print_refinement_invariant r =
     let const_type = EConstr.of_constr body.const_type in
     if isArity sigma const_type then
       match body.const_body with
-        | Def term ->
-          let _ = if has_nodep_prod global_env sigma (EConstr.of_constr term) then print_string "non dep\n" else print_string "dep\n" in
-          let inv_term = invariant_from_type global_env (EConstr.of_constr term) in
-          PrintDebug.print_econstr inv_term
+      | Def term ->
+        let inv_term = invariant_from_type global_env (EConstr.of_constr term) in
+        PrintDebug.print_econstr inv_term
         | _ -> raise (UnsupportedFeature "only handling defined, transparent references")
     else raise (GenEx "Constant reference must be doing something")
   | _ -> Feedback.msg_info (Pp.str "Not an inductive type reference")
