@@ -31,9 +31,6 @@ let create_decl_certificate_theorem start_st start_env final_st final_env =
             mkApp (rev_constant, [| TypeGen.dec_type; !current_program |]);
             final_st; final_env |])
 
-let curr_env_name = ref "cake_env"
-let next_env_num = ref 0
-let curr_st_num = ref 0
 
 let _ = Declare.declare_definition
     ~info:(Declare.Info.make ())
@@ -59,7 +56,7 @@ let mk_updated_environment ref cake_env_constant =
     let cake_cons_names = Array.map (fun name -> id_string_map name NameManip.cakeml_constructor_string |>
                                                  Names.Id.to_string |> str_to_coq_str) cons_names in
     let stamps =
-      Array.map (fun name -> mkApp (get_stamp_constr "TypeStamp", [|name; get_nat_constr "O"|])) cake_cons_names
+      Array.map (fun name -> mkApp (get_stamp_constr "TypeStamp", [|name; int_to_coq_nat !curr_st_num |])) cake_cons_names
     in
 
     let cake_args = Array.map int_to_coq_nat cons_num_args in
@@ -120,8 +117,8 @@ let generate_invariant_and_update_environment ref =
     InvGen.generate_refinement_invariant ref;
     let cake_dec = translate_declaration ref in
     add_dec_to_current_program cake_dec;
-    curr_st_num := !curr_st_num + 1;
-    update_environment ref
+    update_environment ref;
+    curr_st_num := !curr_st_num + 1
 
   | ConstRef _ ->
     InvGen.generate_refinement_invariant ref;

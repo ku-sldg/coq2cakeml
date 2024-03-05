@@ -26,17 +26,11 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   let open Context.Rel.Declaration in
   let open Names in
-  (* let open Univ in *)
   let num_params = mut_body.mind_nparams_rec in
-  (* let param_types = mut_body.mind_params_ctxt |> *)
-  (*              of_rel_context |> *)
-  (*              List.map (fun x -> get_type x) *)
-  (* in *)
 
   (* Setting up all the variable names and their types *)
   let param_name i = Names.Id.of_string ("PARAM" ^ string_of_int i) in
   let param_names = List.init num_params param_name in
-  (* let param_type = mkType (Univ.Universe.make (Univ.Level.var 1)) in *)
 
   let result_name = Names.Id.of_string ("RESULT_TYPE") in
   let max_univ = Univ.Level.Set.choose (UGraph.domain (Environ.universes env)) in
@@ -96,12 +90,10 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
   let matched_type = mkApp (mkInd inductive_name, List.map mkVar param_names |> Array.of_list) in
 
   let orig_name = Id.of_string "orig" in
-  (* let orig_type = mkVar result_name in *)
 
   let pat_str_names = generate_pat_strs num_params (Array.map fst one_body.mind_nf_lc |> Array.to_list) in
 
   let env_name = Id.of_string "env" in
-  (* let env_type = TypeGen.sem_env_type TypeGen.val_type in *)
 
 
   (*  orig = match matched with *)
@@ -154,7 +146,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
       TypeGen.(prod_type pat_type exp_type)
   in
 
-  let type_stamp = mkApp (TermGen.get_stamp_constr "TypeStamp", [| TermGen.str_to_coq_str ""; TermGen.get_nat_constr "O" |]) in
+  let type_stamp = mkApp (TermGen.get_stamp_constr "TypeStamp", [| TermGen.str_to_coq_str ""; TermGen.int_to_coq_nat (!TermGen.curr_st_num - 1) |]) in (* hack to generate correct typstemp Note: will not work *)
   let good_cons_env_prop = mkApp (TermGen.mk_good_cons_env, [| cake_list_pats; mkVar env_name; type_stamp |]) in
 
   let eval_term = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "RefineInv.EVAL") in

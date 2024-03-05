@@ -133,3 +133,7 @@ let mk_merge_envs env1 env2 = mkApp(get_constant "EnvWrangling" "merge_envs", [|
 let mk_write_rec funs cl_env env = mkApp(get_constant "EnvWrangling" "write_rec", [|funs; cl_env; env|])
 
 let mk_write_c_list cs env = mkApp(get_constant "EnvWrangling" "write_c_list", [|cs; env|])
+
+let curr_env_name = ref "cake_env"
+let next_env_num = ref 0
+let curr_st_num = ref 0

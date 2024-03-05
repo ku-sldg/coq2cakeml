@@ -160,7 +160,7 @@ let refinement_invariant env name =
     let existentials = build_existentials (TypeGen.val_type) 0 in
     let cake_val =
       let fixed_name = String.capitalize_ascii constr_name |> TermGen.str_to_coq_str in
-      let stamp = mkApp (TermGen.get_stamp_constr "TypeStamp", [| fixed_name; TermGen.get_nat_constr "O" |]) in (* Here we're always giving the typestamp 0, might need to change later *)
+      let stamp = mkApp (TermGen.get_stamp_constr "TypeStamp", [| fixed_name; int_to_coq_nat !curr_st_num |]) in
       let stamp_op = TermGen.option_to_coq_option (Some stamp) TypeGen.stamp_type in
 
       let args = let _,v = Evarsolve.refresh_universes None env'' sigma (TypeGen.val_type) in

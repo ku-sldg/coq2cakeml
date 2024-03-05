@@ -1,5 +1,6 @@
 Require Export Loader. (* I'd like this to be Coq2CakeML *)
 
+
 Require Import CakeSem.Namespace.
 Require Import CakeSem.CakeAST.
 Require Import CakeSem.SemanticsAux.
@@ -28,6 +29,7 @@ Proof.
   - solve_case Hcase (@nil val) matched_st.
     repeat normalize_fuels [matched_f; case_f].
     repeat handle_good_cons.
+    simpl.
     final_solve.
 
   - solve_case Hcase0 [match_arg_v; match_arg_v0] matched_st.
@@ -35,6 +37,8 @@ Proof.
     repeat handle_good_cons.
     final_solve.
 Qed.
+
+GenerateInvariant nat.
 
 Theorem EVAL_ECon_list_nil :
   forall A A_INV env,
@@ -51,6 +55,7 @@ Proof.
   unfold build_conv.
   unfold ident_string_beq in HnsLookup.
   rewrite HnsLookup. simpl. reflexivity.
+  simpl.
   reflexivity.
   Unshelve.
   constructor.
@@ -140,6 +145,7 @@ Obligations.
   unfold DECL.
   eexists.
   simpl.
+  simp evaluate_decs; simpl.
   simp evaluate_decs; simpl.
   simp evaluate_decs; simpl.
   simp eval_or_match; simpl.
