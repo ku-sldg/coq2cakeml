@@ -96,3 +96,39 @@ let rec ident_of_str ?(long = []) name_str =
 
 let mk_eq typ t1 t2 =
   mkApp (get_constructor "" "eq" "eq_refl", [|typ; t1; t2|])
+
+let get_constant module_name identifier_name =
+  let const_qualid = Libnames.qualid_of_string (if module_name <> ""
+                                                then String.concat "." [module_name; identifier_name]
+                                                else identifier_name)
+  in
+  let constant = Smartlocate.global_constant_with_alias const_qualid in
+  mkConst constant
+
+let mk_nsBind = get_constant "Namespace" "nsBind"
+let mk_extend_dec_env = get_constant "SemanticsAux" "extend_dec_env"
+let mk_nsEmpty = get_constant "Namespace" "nsEmpty"
+let mk_Build_sem_env = get_constructor "SemanticsAux" "sem_env" "Build_sem_env"
+
+let mk_good_cons_env = get_constant "RefineInv" "good_cons_env"
+
+let unknown_loc = list_to_coq_list [] nat_type
+
+let mkFUNC typ1 typ2 inv1 inv2 = mkApp(get_constant "RefineInv" "FUNC",[|typ1; typ2; inv1; inv2|])
+
+let mkEVAL cake_env exp inv = mkApp(get_constant "RefineInv" "EVAL",[|cake_env; exp; inv|])
+
+let mk_write_v name v env = mkApp(get_constant "EnvWrangling" "write_v", [|name; v; env|])
+
+let mk_write_c name c env = mkApp(get_constant "EnvWrangling" "write_c", [|name; c; env|])
+
+let mk_merge_envs env1 env2 = mkApp(get_constant "EnvWrangling" "merge_envs", [|env1; env2|])
+
+let mk_write_rec funs cl_env env = mkApp(get_constant "EnvWrangling" "write_rec", [|funs; cl_env; env|])
+
+let mk_write_c_list cs env = mkApp(get_constant "EnvWrangling" "write_c_list", [|cs; env|])
+
+let curr_env_name = ref "cake_env"
+let prev_env_name = ref "cake_env"
+let next_env_num = ref 0
+let curr_st_num = ref 0

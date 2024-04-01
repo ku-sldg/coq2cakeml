@@ -9,7 +9,19 @@ DECLARE PLUGIN "coq2cakeml.plugin"
 
 VERNAC COMMAND EXTEND Extraction CLASSIFIED AS QUERY
 (* Extraction in the Coq toplevel *)
-| [ "Translate" global(x) ] -> { translate_and_print x }
-| [ "TranslateDefine" global(x) ] -> { translate_and_add_to_global_environment x }
-| [ "GenerateInvariant" global(x) ] -> { generate_refinement_invariant x }
+| [ "PrintTranslation" global(x) ] -> { translate_and_print x }
+| [ "PrintInvariant" global(x) ] -> { print_refinement_invariant x }
+| [ "GenerateInvariant" global(x) ] -> { generate_invariant_and_update_environment x }
+  END
+
+{
+  let classify_generate_certificate x =
+    Vernacextend.(VtStartProof (Doesn'tGuaranteeOpacity,[]))
+}
+
+VERNAC COMMAND EXTEND CertificateGen CLASSIFIED BY {classify_generate_certificate}
+| ![program_interactive] [ "GenerateMatchLemma" global(ref) ] -> { generate_match_theorem ~ref }
+| ![program_interactive] [ "GenerateCertificate" global(ref) ] -> { generate_eval_certificate_theorem ~ref }
+| ![program_interactive] [ "GenDECL" global(ref) ] -> { generate_decl_certificate_theorem ~ref }
+| ![program_interactive] [ "FinishProgram" string(name) ] -> { generate_program_decl_certificate_theorem name }
 END
