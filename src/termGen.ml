@@ -1,5 +1,5 @@
 open Util
-open Constr
+open EConstr
 open TypeGen
 
 let get_constructor module_name type_name constructor_name =
@@ -61,6 +61,10 @@ let char_to_coq_ascii char =
     mkApp (ascii_const, args)
 
   else mkApp (ascii_const, Array.make 8 false_const)
+
+let rec int_to_coq_nat i =
+  if i < 0 then get_constructor "" "" "O"
+  else mkApp (get_constructor "" "" "S", [| int_to_coq_nat (i - 1)|])
 
 let rec str_to_coq_str str =
   if str = "" then get_string_constr "EmptyString"
