@@ -4,10 +4,11 @@ DECLARE PLUGIN "coq2cakeml.plugin"
   open Stdarg
   open Extraction
   open InvGen
-
+  open CertificateGen
+  open CaseRuleGenerator
 }
 
-VERNAC COMMAND EXTEND Extraction CLASSIFIED AS QUERY
+VERNAC COMMAND EXTEND CakeTranslate CLASSIFIED AS QUERY
 (* Extraction in the Coq toplevel *)
 | [ "PrintTranslation" global(x) ] -> { translate_and_print x }
 | [ "PrintInvariant" global(x) ] -> { print_refinement_invariant x }

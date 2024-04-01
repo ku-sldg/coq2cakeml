@@ -1,7 +1,7 @@
 (* Functions that generate Coq types *)
 
 open Util
-open Constr
+open EConstr
 
 (* Smartlocate uses the names in the current environment. *)
 (* So if for examples CakeAST has been imported then the qualified id wouldn't *)
@@ -38,9 +38,11 @@ let cake_ast_mod = "CakeSem.CakeAST"
 let exp_type   = get_type cake_ast_mod "exp"
 let pat_type   = get_type cake_ast_mod "pat"
 let ast_t_type = get_type cake_ast_mod "ast_t"
+let dec_type = get_type cake_ast_mod "dec"
 let cake_semanticsaux_mod = "CakeSem.SemanticsAux"
 let stamp_type = get_type cake_semanticsaux_mod "stamp"
-let val_type () = get_type cake_semanticsaux_mod "val"
+let val_type = get_type cake_semanticsaux_mod "val"
+let sem_env_type a_type = mkApp (get_type cake_semanticsaux_mod "sem_env", [|a_type|])
 
 let cake_namespace_mod = "CakeSem.Namespace"
 let ident_type long_type short_type = mkApp (get_type cake_namespace_mod "ident",

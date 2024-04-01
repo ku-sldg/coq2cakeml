@@ -83,11 +83,6 @@ Proof.
     assumption.
 Qed.
 
-Print sig.
-
-Definition sig_EVAL (env : sem_env val) (e : exp) (inv : val -> Prop) :=
- forall st, exists v f st', evaluate [e] f st env = (st', Rval [v]) /\ inv v.
-
 (* Certificate theorem for CakeML expressions *)
 Definition EVAL (env : sem_env val) (e : exp) (inv : val -> Prop) :=
  forall st, exists v f st', evaluate [e] f st env = (st', Rval [v]) /\ inv v.
@@ -131,10 +126,6 @@ Proof.
   Unshelve.
   constructor.
 Qed.
-
-
-
-
 
 (* Theorem EVAL_ELetrec_Fun {A B : Type} (env : sem_env val) (AINV : A -> val -> Prop) (BINV : B -> val -> Prop) (f : A -> B) (fname var : varN) (body : exp) : *)
 (*   (forall (x : A) (v : val), AINV x v -> EVAL (bind_variable_name var v env) body (BINV (f x))) -> *)

@@ -23,21 +23,12 @@ let create_certificate_theorem env cake_env term =
   it_mkProd_or_LetIn (mkEVAL cake_env exp decl') prods'
 
 (* Definition DECL (st : state ST) (env : sem_env val) (decs : list dec) (st' : state ST) (env' : sem_env val) *)
-let create_decl_certificate_theorem start_st start_env final_st final_env =
-  let decl_constant = mkConst (Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "DECL")) in
-  let rev_constant = mkConst (Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "rev")) in
-  mkApp (decl_constant,
-         [| start_st; start_env;
-            mkApp (rev_constant, [| TypeGen.dec_type; !current_program |]);
-            final_st; final_env |])
-
 let create_decl_indiv_certificate_theorem start_st start_env dec final_st final_env =
   let decl_constant = mkConst (Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "DECL")) in
   mkApp (decl_constant,
          [| start_st; start_env;
             list_to_coq_list [dec] TypeGen.dec_type;
             final_st; final_env |])
-
 
 let _ = Declare.declare_definition
     ~info:(Declare.Info.make ())
@@ -213,10 +204,15 @@ let generate_program_decl_certificate_theorem ~pm prog_name =
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
 
-  let certificate = create_decl_certificate_theorem mk_init_state mk_empty_sem_env
-      (mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [|TypeGen.nat_type; mk_init_state; int_to_coq_nat !curr_st_num|]))
+  let decl_constant = get_constant "" "DECL" in
+  let rev_constant = get_constant "" "rev" in
+  let certificate = mkApp (decl_constant,
+                           [| mk_init_state; mk_empty_sem_env;
+                              mkApp (rev_constant, [| TypeGen.dec_type; !current_program |]);
+                              mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [|TypeGen.nat_type; mk_init_state; int_to_coq_nat !curr_st_num|]);
+                              get_constant "" !curr_env_name |])
+  in
 
-      (get_constant "" !curr_env_name)in
   let certificate_theorem_name = Nameops.add_prefix "cake_prog_" (Nameops.add_suffix (Names.Id.of_string prog_name) "_certificate_thm") in
 
   let sigma', declaration_type = Typing.type_of ~refresh:true global_env sigma certificate in
