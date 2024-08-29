@@ -21,29 +21,8 @@ Require Import Extraction.
 
 PrintInvariant list.
 GenerateInvariant list.
-GenerateMatchLemma list.
-Proof.
-  my_intros.
-  handle_matched.
-  destruct matched; destruct_inv Hinv_match.
-  - solve_case Hcase (@nil val) matched_st.
-    repeat normalize_fuels [matched_f; case_f].
-    repeat handle_good_cons.
-    simpl.
-    final_solve.
 
-  - solve_case Hcase0 [match_arg_v; match_arg_v0] matched_st.
-    repeat normalize_fuels [matched_f; case_f].
-    repeat handle_good_cons.
-    final_solve.
-Qed.
-
-GenerateInvariant nat.
-
-Theorem EVAL_ECon_list_nil :
-  forall A A_INV env,
-    nsLookup ident_string_beq (Short "Nil") (sec env) = Some (0, TypeStamp "Nil" 0) ->
-    EVAL env (ECon (Some (Short "Nil")) []) (list_INV A A_INV []).
+GenerateConstLemma nil.
 Proof.
   intros A AINV env HnsLookup st.
   unfold evaluate.
@@ -61,12 +40,7 @@ Proof.
   constructor.
 Qed.
 
-Theorem EVAL_ECon_list_Cons :
-  forall A A_INV env a xs e1 e2,
-    nsLookup ident_string_beq (Short "Cons") (sec env) = Some (2, TypeStamp "Cons" 0) ->
-    EVAL env e1 (A_INV a) ->
-    EVAL env e2 (list_INV A A_INV xs) ->
-    EVAL env (ECon (Some (Short "Cons")) [e1;e2]) (list_INV A A_INV (a::xs)).
+GenerateConstLemma cons.
 Proof.
   intros A AINV env a xs e1 e2 HnsLookup He1 He2.
   unfold EVAL, evaluate in *.
@@ -97,9 +71,69 @@ Proof.
   lia.
 Qed.
 
+GenerateMatchLemma list.
+Proof.
+  my_intros.
+  handle_matched.
+  destruct matched; destruct_inv Hinv_match.
+  - solve_case Hcase (@nil val) matched_st.
+    repeat normalize_fuels [matched_f; case_f].
+    repeat handle_good_cons.
+    simpl.
+    final_solve.
+
+  - solve_case Hcase0 [match_arg_v; match_arg_v0] matched_st.
+    repeat normalize_fuels [matched_f; case_f].
+    repeat handle_good_cons.
+    final_solve.
+Qed.
+
+GenerateInvariant nat.
+
 Require Import CakeSem.Evaluate.
 GenerateCertificate map.
 Obligations.
+(* (* messing around *) *)
+(*   intros A AINV B BINV. *)
+(*   apply EVAL_EFun. *)
+(*   intros f v H. *)
+(*   Search "ELetrec". *)
+(*   apply EVAL_ELetrec_noEQ. *)
+(*   intros n. *)
+(*   induction n. *)
+(*     * intros u H'. *)
+(*       apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(map f l)) []. *)
+(*       + reflexivity. *)
+(*       + good_cons_env_solve. *)
+(*       + apply EVAL_EVar with u; try reflexivity; try assumption. *)
+(*       + intro. *)
+(*         eapply EVAL_ECon_nil. *)
+(*         reflexivity. *)
+(*       + intros aa ab ac ad contra. *)
+(*         inv contra. *)
+(*     * intros u H'. *)
+(*       apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(map f l)) (a::n). *)
+(*       + reflexivity. *)
+(*       + good_cons_env_solve. *)
+(*       + eapply EVAL_EVar; try reflexivity; try assumption. *)
+(*       + intro contra. inv contra. *)
+(*       + intros. *)
+(*         eapply EVAL_ECon_cons. *)
+(*         -- reflexivity. *)
+(*         -- eapply EVAL_EApp_Opapp. *)
+(*            ** apply EVAL_EVar with v;try reflexivity; try assumption. *)
+(*               apply H. *)
+(*            ** eapply EVAL_EVar ; try reflexivity; try assumption. *)
+(*         -- eapply EVAL_EApp_Opapp. *)
+(*            ** *)
+(*               eapply EVAL_EVar_Recclosure. *)
+(*               ++ intros. *)
+(*                  reflexivity. *)
+(*               ++ apply IHn. *)
+(*            ** eapply EVAL_EVar; try reflexivity; try assumption. *)
+(*               unfold EQ. split; inv H0; try reflexivity; try assumption. *)
+
+(*       (* end messing *) *)
   intros A AINV B BINV.
   apply EVAL_EFun.
   intros f v H.
@@ -114,7 +148,7 @@ Obligations.
       + good_cons_env_solve.
       + apply EVAL_EVar with u; try reflexivity; try assumption.
       + intro.
-        eapply EVAL_ECon_list_nil.
+        eapply EVAL_ECon_nil.
         reflexivity.
       + intros aa ab ac ad contra.
         inv contra.
@@ -125,7 +159,7 @@ Obligations.
       + eapply EVAL_EVar; try reflexivity; try assumption.
       + intro contra. inv contra.
       + intros.
-        eapply EVAL_ECon_list_Cons.
+        eapply EVAL_ECon_cons.
         -- reflexivity.
         -- eapply EVAL_EApp_Opapp.
            ** apply EVAL_EVar with v;try reflexivity; try assumption.
@@ -140,7 +174,7 @@ Obligations.
               unfold EQ. split; inv H0; try reflexivity; try assumption.
 Qed.
 
-GenDECL map.
+GenerateDeclaration map.
 Proof.
   unfold DECL.
   exists 0.

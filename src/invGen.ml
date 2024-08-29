@@ -307,7 +307,6 @@ let rec invariant_from_type env typ =
   | _ -> raise (UnsupportedFeature "invariant_from_type : haven't done yet")
 
 let generate_refinement_invariant r =
-  print_string "testglob\n";
   let glob_ref = locate_global_ref r in
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in

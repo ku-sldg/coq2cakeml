@@ -2,7 +2,7 @@ open Util
 open EConstr
 open TypeGen
 
-let get_constructor module_name type_name constructor_name =
+let get_constructor module_name constructor_name =
   let const_qualid = Libnames.qualid_of_string (if module_name != ""
                                                 then (String.concat "." [module_name; constructor_name])
                                                 else constructor_name)
@@ -10,40 +10,40 @@ let get_constructor module_name type_name constructor_name =
   let constr = Smartlocate.global_constructor_with_alias const_qualid in
   mkConstruct constr
 
-let get_nat_constr cname = get_constructor "" "nat" cname
+let get_nat_constr cname = get_constructor "" cname
 
-let get_int_constr cname = get_constructor "BinInt" "Z" cname
+let get_int_constr cname = get_constructor "BinInt" cname
 
-let get_option_constr cname = get_constructor "" "option" cname
+let get_option_constr cname = get_constructor "" cname
 
-let get_list_constr cname = get_constructor "" "list" cname
+let get_list_constr cname = get_constructor "" cname
 
-let get_string_constr cname = get_constructor "Strings.String" "string" cname
+let get_string_constr cname = get_constructor "Strings.String" cname
 
-let get_ident_constr cname = get_constructor "Namespace" "ident" cname
+let get_ident_constr cname = get_constructor "Namespace" cname
 
-let get_exp_constr cname = get_constructor "CakeAST" "exp" cname
+let get_exp_constr cname = get_constructor "CakeAST" cname
 
-let get_lit_constr cname = get_constructor "CakeAST" "lit" cname
+let get_lit_constr cname = get_constructor "CakeAST" cname
 
-let get_opn_constr cname = get_constructor "CakeAST" "opn" cname
+let get_opn_constr cname = get_constructor "CakeAST" cname
 
-let get_op_constr cname = get_constructor "CakeAST" "op" cname
+let get_op_constr cname = get_constructor "CakeAST" cname
 
-let get_pat_constr cname = get_constructor "CakeAST" "pat" cname
+let get_pat_constr cname = get_constructor "CakeAST" cname
 
-let get_ast_t_constr cname = get_constructor "CakeAST" "ast_t" cname
+let get_ast_t_constr cname = get_constructor "CakeAST" cname
 
-let get_dec_cons cname = get_constructor "CakeAST" "dec" cname
+let get_dec_cons cname = get_constructor "CakeAST" cname
 
-let get_stamp_constr cname = get_constructor "SemanticsAux" "stamp" cname
+let get_stamp_constr cname = get_constructor "SemanticsAux" cname
 
-let get_val_constr cname = get_constructor "SemanticsAux" "val" cname
+let get_val_constr cname = get_constructor "SemanticsAux" cname
 
 let char_to_coq_ascii char =
-  let ascii_const = get_constructor "Strings.Ascii" "ascii" "Ascii" in
-  let true_const  = get_constructor "" "bool" "true" in
-  let false_const = get_constructor "" "bool" "false" in
+  let ascii_const = get_constructor "Strings.Ascii" "Ascii" in
+  let true_const  = get_constructor "" "true" in
+  let false_const = get_constructor "" "false" in
   let code = Char.code char in
 
   if code <= 255 && code >= 0 then
@@ -63,8 +63,8 @@ let char_to_coq_ascii char =
   else mkApp (ascii_const, Array.make 8 false_const)
 
 let rec int_to_coq_nat i =
-  if i < 0 then get_constructor "" "" "O"
-  else mkApp (get_constructor "" "" "S", [| int_to_coq_nat (i - 1)|])
+  if i <= 0 then get_constructor "" "O"
+  else mkApp (get_constructor "" "S", [| int_to_coq_nat (i - 1)|])
 
 let rec str_to_coq_str str =
   if str = "" then get_string_constr "EmptyString"
@@ -80,7 +80,7 @@ let name_to_str ?(anon = "") name =
   | Name id -> Id.to_string id
 
 let pair_to_coq_pair (x,y) xty yty =
-  mkApp (get_constructor "Coq.Init.Datatypes" "prod" "pair", [|xty; yty; x; y |])
+  mkApp (get_constructor "Coq.Init.Datatypes" "pair", [|xty; yty; x; y |])
 
 let rec list_to_coq_list list typ =
   match list with
@@ -99,7 +99,7 @@ let rec ident_of_str ?(long = []) name_str =
                    [| string_type; string_type; str_to_coq_str h; ident_of_str ~long:t name_str|])
 
 let mk_eq typ t1 t2 =
-  mkApp (get_constructor "" "eq" "eq_refl", [|typ; t1; t2|])
+  mkApp (get_type "Coq.Init.Logic" "eq", [|typ; t1; t2|])
 
 let get_constant module_name identifier_name =
   let const_qualid = Libnames.qualid_of_string (if module_name <> ""
@@ -112,7 +112,7 @@ let get_constant module_name identifier_name =
 let mk_nsBind = get_constant "Namespace" "nsBind"
 let mk_extend_dec_env = get_constant "SemanticsAux" "extend_dec_env"
 let mk_nsEmpty = get_constant "Namespace" "nsEmpty"
-let mk_Build_sem_env = get_constructor "SemanticsAux" "sem_env" "Build_sem_env"
+let mk_Build_sem_env = get_constructor "SemanticsAux" "Build_sem_env"
 
 let mk_good_cons_env = get_constant "RefineInv" "good_cons_env"
 

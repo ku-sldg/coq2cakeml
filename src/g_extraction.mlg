@@ -6,7 +6,21 @@ DECLARE PLUGIN "coq2cakeml.plugin"
   open InvGen
   open CertificateGen
   open CaseRuleGenerator
+  open ConstructorRuleGenerator
 }
+
+(* { *)
+(*   let test_function r = *)
+(*     let glob_ref = locate_global_ref r in *)
+(*     let global_env = Global.env () in *)
+(*     match glob_ref with *)
+(*     | IndRef (mutname, index) -> *)
+(*       let mut_body = Environ.lookup_mind mutname global_env in *)
+(*       let one_body = mut_body.mind_packets.(0) in *)
+(*       generate_econ_lemma_from_constructor global_env one_body ((mutname,index),2) mut_body.mind_nparams *)
+(*     | _ -> Feedback.msg_info (Pp.str "Not an inductive type reference") *)
+
+(* } *)
 
 VERNAC COMMAND EXTEND CakeTranslate CLASSIFIED AS QUERY
 (* Extraction in the Coq toplevel *)
@@ -22,7 +36,9 @@ VERNAC COMMAND EXTEND CakeTranslate CLASSIFIED AS QUERY
 
 VERNAC COMMAND EXTEND CertificateGen CLASSIFIED BY {classify_generate_certificate}
 | ![program_interactive] [ "GenerateMatchLemma" global(ref) ] -> { generate_match_theorem ~ref }
+| ![program_interactive] [ "GenerateMatchLemma" global(ref) ] -> { generate_match_theorem ~ref }
+| ![program_interactive] [ "GenerateConstLemma" global(ref) ] -> { generate_constructor_lemma ~ref }
 | ![program_interactive] [ "GenerateCertificate" global(ref) ] -> { generate_eval_certificate_theorem ~ref }
-| ![program_interactive] [ "GenDECL" global(ref) ] -> { generate_decl_certificate_theorem ~ref }
+| ![program_interactive] [ "GenerateDeclaration" global(ref) ] -> { generate_decl_certificate_theorem ~ref }
 | ![program_interactive] [ "FinishProgram" string(name) ] -> { generate_program_decl_certificate_theorem name }
 END
