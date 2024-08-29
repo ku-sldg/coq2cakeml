@@ -30,6 +30,8 @@ let prod_type a_type b_type = mkApp (get_type coq_init_mod "prod",
 let list_type a_type = mkApp (get_type coq_init_mod "list",
                               [| a_type |])
 
+let option_type a_type = mkApp (get_type coq_init_mod "option", [| a_type |])
+
 let and_type a_type b_type = mkApp (get_type coq_init_logic "and", [| a_type; b_type |])
 let eq_type a_type a1 a2 = mkApp (get_type coq_init_logic "eq", [| a_type; a1; a2 |])
 let ex_type a_type a_to_prop = mkApp (get_type coq_init_logic "ex", [| a_type; a_to_prop |])

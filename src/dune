@@ -4,7 +4,7 @@
  (synopsis "Proof producing CakeML extraction")
  (flags :standard -rectypes -w -27)
  (libraries coq-core.vernac coq-core.lib coq-core.kernel)
- (modules (:standard \ constructorRuleGenerator))
+ (modules (:standard))
  )
 
 (coq.pp (modules g_extraction))

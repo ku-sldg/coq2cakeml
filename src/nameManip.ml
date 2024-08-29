@@ -11,6 +11,13 @@ let constant_inv_name constant = Nameops.add_suffix (id_of_constant constant)"_I
 let id_string_map id (f : string -> string) =
   id |> Names.Id.to_string |> f |> Names.Id.of_string
 
+let name_string_map name (f : string -> string) =
+  let open Names in
+  match name with
+  | Name id -> Name (id_string_map id f)
+  | _ -> name
+
+
 (* CakeML name rules:
    1. Names start with an alpha
    2. Type names are lowercase and constructor names are uppercase

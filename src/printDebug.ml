@@ -27,6 +27,29 @@ let rec print_constr_shape c =
   | Proj _ -> "Proj"
   | Int _ | Float _ | Array _ -> "Builtin"
 
+let rec print_econstr_shape c =
+  match EConstr.kind (Evd.from_env (Global.env ())) c with
+  | Rel i -> "(Rel " ^ string_of_int i ^ ")"
+  | Var n -> String.concat "" ["(Var : "; Names.Id.to_string n; ")"]
+  | Meta _ -> "Meta"
+  | Evar _ -> "Evar"
+  | Sort _ -> "Sort"
+  | Cast _ -> "Cast"
+  | Prod (n,t,c') when n.binder_name = Names.Anonymous -> String.concat "" ["(";print_econstr_shape t;") -> "; print_econstr_shape c']
+  | Prod (n,t,c') -> String.concat "" ["!(";name_to_string n.binder_name; " : "; print_econstr_shape t;")."; print_econstr_shape c']
+  | Lambda (_,_,c') -> String.concat "" ["\\. "; "("; print_econstr_shape c'; ")"]
+  | LetIn (_,c1,_,c2) -> String.concat "" ["let ("; print_econstr_shape c1; ") in ("; print_econstr_shape c2; ")" ]
+  | App (hd,args) -> String.concat "" ["("; String.concat " " (List.map print_econstr_shape (hd :: Array.to_list args)); ")"]
+  | Case (_,_,_,_,_,c',cs) ->
+    String.concat "" ["case "; print_econstr_shape c'; " of " ; Array.map snd cs |> Array.to_list |> List.map print_econstr_shape |> String.concat " |->" ]
+  | Const (n,_) -> String.concat "" ["(Const : "; Names.Constant.to_string n; ")"]
+  | Ind ((n,i),_) -> String.concat "" ["(Ind : "; Names.Id.to_string (Environ.lookup_mind n (Global.env ())).mind_packets.(i).mind_typename; ")"]
+  | Construct (((n,i),ci),_) -> String.concat "" ["(Construct : "; Names.Id.to_string ((Environ.lookup_mind n (Global.env ())).mind_packets.(i)).mind_consnames.(ci - 1); ")"]
+  | Fix ((_,i),(_,_,cs))-> String.concat "" ["f\\. ("; print_econstr_shape cs.(i); ")"]
+  | CoFix _ -> "CoFix"
+  | Proj _ -> "Proj"
+  | Int _ | Float _ | Array _ -> "Builtin"
+
 let print_constr ?(debruijn = false) ?(env = Global.env ()) e =
   let sigma = Evd.from_env env in
   let env' = if debruijn then Environ.pop_rel_context (Environ.nb_rel env) env
@@ -98,19 +121,17 @@ let print_name n =
 let print_pt ?env pt =
   let open Context.Rel.Declaration in
   match pt with
-  | LocalAssum (n,t) -> print_name n.binder_name; print_string " : "; print_constr ?env t
+  | LocalAssum (n,t) -> print_name n.binder_name; print_string " : "; print_econstr ?env t
   | LocalDef (n,c,t) -> print_name n.binder_name; print_string " = ";
-                        print_constr ?env c; print_string "    : ";
-                        print_constr ?env t
+                        print_econstr ?env c; print_string "    : ";
+                        print_econstr ?env t
 
-let rec print_env_rel ?(debruijn = false) (env : Environ.env) =
-  if env.env_nb_rel = 0 then ()
-  else
-    let pt = Environ.lookup_rel 1 env in
-    let env' = Environ.pop_rel_context 1 env in
-    let env'' = if debruijn then Environ.pop_rel_context (Environ.nb_rel env) env
-      else env' in
-    print_pt ~env:env'' pt;
-    print_env_rel ~debruijn:debruijn env'
+let rec print_pt_list env pts =
+  match pts with
+  | [] -> ()
+  | x::pts' ->
+    print_pt ~env:env x;
+    print_pt_list (EConstr.push_rel x env) pts'
+
 
 let ps s = Feedback.msg_info (Pp.str s)

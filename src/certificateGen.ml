@@ -157,7 +157,7 @@ let generate_eval_certificate_theorem ~pm ~ref =
 
   | _ -> raise (UnsupportedFeature "need to come back here")
 
-let generate_decl_certificate_theorem ~pm ~ref =
+let generate_val_decl_certificate_theorem ~pm ~ref =
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
 
@@ -175,7 +175,7 @@ let generate_decl_certificate_theorem ~pm ~ref =
   let default_prod =
     pair_to_coq_pair (default_name, default_val) (ident_type string_type string_type) val_type in
   let env' =
-    mkApp (get_constructor "SemanticsAux" "" "Build_sem_env",
+    mkApp (get_constructor "SemanticsAux" "Build_sem_env",
            [| val_type;
               list_to_coq_list [mkApp (get_constant "Lists.List" "hd",
                                        [| prod_type (ident_type string_type string_type) val_type;
@@ -199,6 +199,61 @@ let generate_decl_certificate_theorem ~pm ~ref =
   let cinfo' = CInfo.make ~name:certificate_theorem_name ~typ:certificate () in
   let info = Info.make () in
   pm, Declare.Proof.start ~info ~cinfo:cinfo' sigma'
+
+let generate_type_decl_certificate_theorem ~pm ~ref =
+  let global_env = Global.env () in
+  let sigma = Evd.from_env global_env in
+
+  let open TypeGen in
+
+  let st = mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [|nat_type; mk_init_state; int_to_coq_nat !curr_st_num|]) in
+  let st' = mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [|nat_type; mk_init_state; int_to_coq_nat !curr_st_num|]) in
+  let env = get_constant "" !prev_env_name in
+  let open TypeGen in
+  let default_nat_stamp_pair =
+    pair_to_coq_pair (int_to_coq_nat 0, mkApp(get_stamp_constr "ExnStamp", [| int_to_coq_nat 0 |])) nat_type stamp_type in
+  let default_name =
+    mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str "default"|]) in
+  let default_prod =
+    pair_to_coq_pair (default_name, default_nat_stamp_pair) (ident_type string_type string_type) (prod_type nat_type stamp_type) in
+  let env' =
+    mkApp (get_constructor "SemanticsAux" "Build_sem_env",
+           [| val_type
+            ; mkApp (get_constant "Namespace" "nsEmpty", [| string_type; string_type; val_type |])
+            ; list_to_coq_list [mkApp (get_constant "Lists.List" "hd",
+                                       [| prod_type (ident_type string_type string_type) (prod_type nat_type stamp_type);
+                                          default_prod;
+                                          mkApp (get_constant "SemanticsAux" "sec",
+                                                 [| val_type; get_constant "" !curr_env_name |]) |])]
+                (prod_type ident_str_type (prod_type nat_type stamp_type)) |])
+      in
+  let cake_dec = translate_declaration ref in
+
+  let certificate = create_decl_indiv_certificate_theorem st env cake_dec st' env' in
+
+  let certificate_theorem_name =
+    Nameops.add_prefix "DECL_indiv_" (Nameops.add_suffix (snd (Libnames.repr_qualid ref)) "_cert_thm") in
+
+  let sigma', declaration_type = Typing.type_of ~refresh:true global_env sigma certificate in
+
+  let open Declare in
+  let pm = OblState.empty in
+  let cinfo' = CInfo.make ~name:certificate_theorem_name ~typ:certificate () in
+  let info = Info.make () in
+  pm, Declare.Proof.start ~info ~cinfo:cinfo' sigma'
+
+let is_type_declaration ~ref =
+  let glob_ref = locate_global_ref ref in
+  match glob_ref with
+  | IndRef _  -> true
+  | _ -> false
+
+let generate_decl_certificate_theorem ~pm ~ref =
+  if is_type_declaration ~ref then
+    generate_type_decl_certificate_theorem ~pm ~ref
+  else
+    generate_val_decl_certificate_theorem ~pm ~ref
+
 
 let generate_program_decl_certificate_theorem ~pm prog_name =
   let global_env = Global.env () in
