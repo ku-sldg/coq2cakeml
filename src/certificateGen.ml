@@ -210,19 +210,22 @@ let generate_type_decl_certificate_theorem ~pm ~ref =
   let st' = mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [|nat_type; mk_init_state; int_to_coq_nat !curr_st_num|]) in
   let env = get_constant "" !prev_env_name in
   let open TypeGen in
-  let default_nat_stamp_pair =
-    pair_to_coq_pair (int_to_coq_nat 0, mkApp(get_stamp_constr "ExnStamp", [| int_to_coq_nat 0 |])) nat_type stamp_type in
-  let default_name =
-    mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str "default"|]) in
-  let default_prod =
-    pair_to_coq_pair (default_name, default_nat_stamp_pair) (ident_type string_type string_type) (prod_type nat_type stamp_type) in
+
+  let glob_ref = locate_global_ref ref in
+  let num_constrs = match glob_ref with
+    | IndRef (mut_name,index) ->
+      let mut_ind_body = Environ.lookup_mind mut_name global_env in
+      mut_ind_body.mind_packets.(index).mind_consnames |> Array.length
+    | _ -> 0
+  in
+
   let env' =
     mkApp (get_constructor "SemanticsAux" "Build_sem_env",
            [| val_type
             ; mkApp (get_constant "Namespace" "nsEmpty", [| string_type; string_type; val_type |])
-            ; list_to_coq_list [mkApp (get_constant "Lists.List" "hd",
+            ; list_to_coq_list [mkApp (get_constant "Lists.List" "firstn",
                                        [| prod_type (ident_type string_type string_type) (prod_type nat_type stamp_type);
-                                          default_prod;
+                                          int_to_coq_nat num_constrs;
                                           mkApp (get_constant "SemanticsAux" "sec",
                                                  [| val_type; get_constant "" !curr_env_name |]) |])]
                 (prod_type ident_str_type (prod_type nat_type stamp_type)) |])
