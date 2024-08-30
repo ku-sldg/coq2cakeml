@@ -195,13 +195,14 @@ let generate_val_decl_certificate_theorem ~pm ~ref =
     mkApp (get_constructor "SemanticsAux" "Build_sem_env",
            [| val_type
             ; if is_type_synonym ref then
+                (PrintDebug.ps "Hi";
                 list_to_coq_list [mkApp (get_constant "Lists.List" "hd",
                                          [| prod_type (ident_type string_type string_type) val_type;
                                             default_prod;
                                             mkApp (get_constant "SemanticsAux" "sev",
                                                    [| val_type; get_constant "" !curr_env_name |]) |])]
                   (prod_type ident_str_type val_type)
-              else
+)              else
                 mkApp (get_constant "Namespace" "nsEmpty", [| string_type; string_type; prod_type nat_type stamp_type |])
             ; mkApp (get_constant "Namespace" "nsEmpty", [| string_type; string_type; prod_type nat_type stamp_type |]) |])
       in
