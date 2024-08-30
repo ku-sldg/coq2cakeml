@@ -206,7 +206,7 @@ let generate_type_decl_certificate_theorem ~pm ~ref =
 
   let open TypeGen in
 
-  let st = mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [|nat_type; mk_init_state; int_to_coq_nat !curr_st_num|]) in
+  let st = mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [|nat_type; mk_init_state; int_to_coq_nat (!curr_st_num - 1)|]) in
   let st' = mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [|nat_type; mk_init_state; int_to_coq_nat !curr_st_num|]) in
   let env = get_constant "" !prev_env_name in
   let open TypeGen in
@@ -223,12 +223,13 @@ let generate_type_decl_certificate_theorem ~pm ~ref =
     mkApp (get_constructor "SemanticsAux" "Build_sem_env",
            [| val_type
             ; mkApp (get_constant "Namespace" "nsEmpty", [| string_type; string_type; val_type |])
-            ; list_to_coq_list [mkApp (get_constant "Lists.List" "firstn",
-                                       [| prod_type (ident_type string_type string_type) (prod_type nat_type stamp_type);
-                                          int_to_coq_nat num_constrs;
-                                          mkApp (get_constant "SemanticsAux" "sec",
-                                                 [| val_type; get_constant "" !curr_env_name |]) |])]
-                (prod_type ident_str_type (prod_type nat_type stamp_type)) |])
+            ; mkApp (get_constant "Lists.List" "firstn",
+                     [| prod_type (ident_type string_type string_type) (prod_type nat_type stamp_type)
+                      ; int_to_coq_nat num_constrs
+                      ; mkApp (get_constant "SemanticsAux" "sec",
+                               [| val_type; get_constant "" !curr_env_name |])
+                     |])
+           |])
       in
   let cake_dec = translate_declaration ref in
 
