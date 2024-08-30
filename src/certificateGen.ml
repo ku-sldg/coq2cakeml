@@ -157,6 +157,23 @@ let generate_eval_certificate_theorem ~pm ~ref =
 
   | _ -> raise (UnsupportedFeature "need to come back here")
 
+let is_type_synonym r =
+  let glob_ref = locate_global_ref r in
+  let global_env = Global.env () in
+  match glob_ref with
+  | ConstRef const_name ->
+    let const_body = Environ.lookup_constant const_name global_env in
+    begin
+      match const_body.const_body with
+      | Def const ->
+        if is_type global_env (EConstr.of_constr const) then
+          true
+        else
+          false
+      | _ -> false
+    end
+  | _ -> false
+
 let generate_val_decl_certificate_theorem ~pm ~ref =
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
@@ -176,14 +193,17 @@ let generate_val_decl_certificate_theorem ~pm ~ref =
     pair_to_coq_pair (default_name, default_val) (ident_type string_type string_type) val_type in
   let env' =
     mkApp (get_constructor "SemanticsAux" "Build_sem_env",
-           [| val_type;
-              list_to_coq_list [mkApp (get_constant "Lists.List" "hd",
-                                       [| prod_type (ident_type string_type string_type) val_type;
-                                          default_prod;
-                                          mkApp (get_constant "SemanticsAux" "sev",
-                                                 [| val_type; get_constant "" !curr_env_name |]) |])]
-                (prod_type ident_str_type val_type);
-              mkApp (get_constant "Namespace" "nsEmpty", [| string_type; string_type; prod_type nat_type stamp_type |]) |])
+           [| val_type
+            ; if is_type_synonym ref then
+                list_to_coq_list [mkApp (get_constant "Lists.List" "hd",
+                                         [| prod_type (ident_type string_type string_type) val_type;
+                                            default_prod;
+                                            mkApp (get_constant "SemanticsAux" "sev",
+                                                   [| val_type; get_constant "" !curr_env_name |]) |])]
+                  (prod_type ident_str_type val_type)
+              else
+                mkApp (get_constant "Namespace" "nsEmpty", [| string_type; string_type; prod_type nat_type stamp_type |])
+            ; mkApp (get_constant "Namespace" "nsEmpty", [| string_type; string_type; prod_type nat_type stamp_type |]) |])
       in
   let cake_dec = translate_declaration ref in
 
