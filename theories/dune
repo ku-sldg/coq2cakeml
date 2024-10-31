@@ -1,5 +1,6 @@
 (coq.theory
  (name CakeMLExtraction)
  (package coq2cakeml)
- (libraries coq2cakeml.plugin)
- (modules (:standard \ MapExample tjsoopsie)))
+ (theories Equations StructTact CakeSem)
+ (plugins coq2cakeml.plugin)
+ (modules :standard))
