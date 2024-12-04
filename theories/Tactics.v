@@ -256,3 +256,17 @@ Ltac final_solve :=
         apply H
     end |
     assumption ].
+
+Ltac next :=
+  match goal with
+  | |- DECL ?st ?env [Dtype ?l ?td] ?st' ?env' => apply DECL_Dtype; try NoDup_solve
+  | |- DECL ?st ?env [Dtabbrev ?l ?tvs ?tn ?ast] ?st' ?env' => apply DECL_Dtabbrev
+  | |- DECL ?st ?env [Dlet ?l (Pvar ?n) (ELetrec [(?n,?v,?b)] (EVar (Short ?n)) ) ] ?st' ?env' =>
+      rewrite DECL_Dlet_Dletrec;
+      eapply DECL_Dletrec
+  | |- DECL ?st ?env [?d] ?st' ?env' => fail 1
+  | |- DECL ?st ?env (?d::?ds) ?st' ?env' => eapply DECL_cons'
+  end;
+  unfold state_update_next_type_stamp;
+  unfold extend_dec_env;
+  simpl.

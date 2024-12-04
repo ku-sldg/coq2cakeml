@@ -187,7 +187,6 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
 
   let final_theorem = subst_and_add_prod (Evd.from_env env) (List.concat [prod_params; prod_param_invs; prod_env; prod_exps; prod_args] |> List.rev) final_prop in
 
-  PrintDebug.print_econstr final_theorem;
   final_theorem
 
 let generate_constructor_lemma ~pm ~ref =

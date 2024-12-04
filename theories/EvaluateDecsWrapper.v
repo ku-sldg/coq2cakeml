@@ -220,21 +220,6 @@ Definition wrapped_eval e env :=
   | (_, Rerr (Rabort _)) => Litv (StrLit "program failure")
   end.
 
-Theorem singular_rec_fun_equiv_DLet_DLetrec : forall f st env locs funname var e,
-    evaluate_decs f st env [Dlet locs (Pvar funname) (ELetrec [(funname,var,e)] (EVar (Short funname)))] =
-      evaluate_decs f st env [Dletrec locs [(funname,var,e)]].
-Proof.
-  intros.
-  simp evaluate_decs; simpl.
-  simp eval_or_match; simpl.
-  unfold build_rec_env; simpl.
-  unfold nsBind; simpl.
-  unfold nsLookup. simpl.
-  rewrite eqb_refl. simpl.
-  simp pmatch. simpl.
-  reflexivity.
-Qed.
-
 Fixpoint eval_decs (fuel : nat) (st : state nat) (env : sem_env val) (decs : list dec) : state nat * result (sem_env val) val :=
   match fuel with
   | O => (st, Rerr (Rabort Rtimeout_error))

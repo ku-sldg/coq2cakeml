@@ -1030,3 +1030,56 @@ Proof.
     Unshelve.
     constructor.
 Qed.
+
+Theorem DECL_cons' : forall (st : state ST) (env : sem_env val) (d : dec) (ds : list dec)
+                       (st' st'' : state ST) (env' env'' env''' : sem_env val),
+    DECL st env [d] st' env' ->
+    DECL st' (extend_dec_env env' env) ds st'' env'' ->
+    env''' = (extend_dec_env env'' env') ->
+    DECL st env (d :: ds) st'' env'''.
+Proof.
+  intros.
+
+  subst.
+  eapply DECL_cons.
+  apply H.
+  apply H0.
+Qed.
+
+Theorem singular_rec_fun_equiv_DLet_DLetrec : forall f st env locs funname var e,
+    evaluate_decs f st env [Dlet locs (Pvar funname) (ELetrec [(funname,var,e)] (EVar (Short funname)))] =
+      evaluate_decs f st env [Dletrec locs [(funname,var,e)]].
+Proof.
+  intros.
+  simp evaluate_decs; simpl.
+  simp eval_or_match; simpl.
+  unfold build_rec_env; simpl.
+  unfold nsBind; simpl.
+  unfold nsLookup. simpl.
+  rewrite eqb_refl. simpl.
+  simp pmatch. simpl.
+  reflexivity.
+Qed.
+
+Theorem DECL_Dlet_Dletrec :
+  forall (st st' : state nat) (env env' : sem_env val) locs (funname var : tvarN) (e : exp),
+    DECL st env [Dlet locs (Pvar funname) (ELetrec [(funname, var, e)] (EVar (Short funname)))] st' env'
+    <->
+      DECL st env [Dletrec locs [(funname, var, e)]] st' env'.
+Proof.
+  intros.
+  unfold DECL.
+  split; intros; destruct H as [f H]; exists f.
+  rewrite <- singular_rec_fun_equiv_DLet_DLetrec; assumption.
+  rewrite singular_rec_fun_equiv_DLet_DLetrec; assumption.
+Qed.
+
+Theorem DECL_Dtabbrev : forall (st : state ST) (env : sem_env val) l tvs tn ast,
+    DECL st env [Dtabbrev l tvs tn ast] st empty_sem_env.
+Proof.
+  intros.
+  unfold DECL.
+  exists 0.
+  simp evaluate_decs. simpl.
+  reflexivity.
+Qed.
