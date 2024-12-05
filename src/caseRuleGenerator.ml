@@ -87,7 +87,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
   in
 
   let matched_name = Id.of_string "matched" in
-  let matched_type = mkApp (mkInd inductive_name, List.map mkVar param_names |> Array.of_list) in
+  let matched_type = mkApp (mkIndU (inductive_name, EInstance.empty), List.map mkVar param_names |> Array.of_list) in
 
   let orig_name = Id.of_string "orig" in
 
@@ -106,12 +106,12 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   let open Inductiveops in
   (* problem somewhere, probably need to add lambdas in front of the b's *)
-  let case_info = make_case_info env inductive_name Sorts.Relevant Constr.RegularStyle in
-  let ind_fam = make_ind_family (Univ.in_punivs inductive_name, List.map Constr.mkVar param_names) in
+  let case_info = make_case_info env inductive_name Constr.RegularStyle in
+  let ind_fam = make_ind_family ((inductive_name, EInstance.empty), List.map EConstr.mkVar param_names) in
   let ind_type = make_ind_type (ind_fam,[]) in
   let cases = List.map2 (fun b typ -> Reduction.eta_expand env b typ) (List.map (to_constr sigma) (List.map mkVar b_names)) (List.map (to_constr sigma) b_types) in
-  let return = mkLambda (Context.annotR Names.Anonymous, matched_type, mkVar result_name) in
-  let match_statement = make_case_or_project env sigma ind_type case_info return (mkVar matched_name) (List.map of_constr cases |> Array.of_list) in
+  let return = mkLambda (annotR Names.Anonymous, matched_type, mkVar result_name) in
+  let match_statement = make_case_or_project env sigma ind_type case_info (return, ERelevance.relevant) (mkVar matched_name) (List.map of_constr cases |> Array.of_list) in
 
   let equiv_prop = TypeGen.eq_type (mkVar result_name) (mkVar orig_name) match_statement in
 
@@ -150,11 +150,11 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
   let good_cons_env_prop = mkApp (TermGen.mk_good_cons_env, [| cake_list_pats; mkVar env_name; type_stamp |]) in
 
   let eval_term = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "RefineInv.EVAL") in
-  let mkEVAL cake_env exp inv = mkApp(mkConst eval_term,[|cake_env; exp; inv|]) in
+  let mkEVAL cake_env exp inv = mkApp(mkConstU (eval_term, EInstance.empty),[|cake_env; exp; inv|]) in
 
   let inv_id = Nameops.add_suffix (Environ.lookup_mind (fst inductive_name) (Global.env ())).mind_packets.(0).mind_typename "_INV" in
   let inv_const =
-    try mkConst (Nametab.locate_constant (Libnames.qualid_of_ident inv_id))
+    try mkConstU (Nametab.locate_constant (Libnames.qualid_of_ident inv_id), EInstance.empty)
     with Not_found -> raise (InvGen.GenEx (String.concat "" [Names.Id.to_string inv_id; " is not defined in the current environment"]))
   in
   let eval_prop = mkEVAL (mkVar env_name) (mkVar mat)
@@ -185,7 +185,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
     (* there is a special place in hell for people who mix index by 0 and index by 1 in the same project *)
     let match_eq_prop = TypeGen.eq_type matched_type (mkVar matched_name)
-        (mkApp (mkConstruct (inductive_name,index+1), List.append param_names arg_names |>
+        (mkApp (mkConstructU ((inductive_name,index+1), EInstance.empty), List.append param_names arg_names |>
         List.map mkVar |>
         Array.of_list))
     in
@@ -196,7 +196,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
       | Ind (ind_name,_) ->
         let inv_id = Nameops.add_suffix (Environ.lookup_mind (fst ind_name) (Global.env ())).mind_packets.(0).mind_typename "_INV" in
         begin
-          try mkConst (Nametab.locate_constant (Libnames.qualid_of_ident inv_id))
+          try mkConstU (Nametab.locate_constant (Libnames.qualid_of_ident inv_id), EInstance.empty)
           with Not_found -> raise (InvGen.GenEx (String.concat "" [Names.Id.to_string inv_id; " was not found in the current environment"]))
         end
       | App (hd,args) -> mkApp (mk_inv hd arg_index, Array.append (Array.map (convert_rel_to_named num_constructor_args arg_index) args) (Array.map (fun t -> mk_inv t arg_index) args) )
@@ -204,7 +204,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
       | Const (const_name,_) ->
         let inv_id = NameManip.constant_inv_name const_name in
         begin
-          try mkConst (Nametab.locate_constant (Libnames.qualid_of_ident inv_id))
+          try mkConstU (Nametab.locate_constant (Libnames.qualid_of_ident inv_id), EInstance.empty)
           with Not_found -> raise (InvGen.GenEx (String.concat "" [Names.Id.to_string inv_id; " was not found in the current environment"]))
         end
 
@@ -240,9 +240,9 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
     let full_prop_rel = Vars.subst_vars sigma (List.append arg_names val_names |> List.rev) full_prop_var in
 
-    let full_prop_vals = it_mkProd full_prop_rel (List.map (fun n -> (Context.annotR (Names.Name.Name n), val_type)) val_names |> List.rev) in
+    let full_prop_vals = it_mkProd full_prop_rel (List.map (fun n -> (annotR (Names.Name.Name n), val_type)) val_names |> List.rev) in
 
-    it_mkProd full_prop_vals (List.map (fun (n,t) -> (Context.annotR (Names.Name.Name n), t)) (List.combine arg_names arg_types) |> List.rev)
+    it_mkProd full_prop_vals (List.map (fun (n,t) -> (annotR (Names.Name.Name n), t)) (List.combine arg_names arg_types) |> List.rev)
 
   in
 
@@ -263,35 +263,35 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   (* All final substitutions *)
   let env_subst = Vars.subst_var sigma env_name final_prop in
-  let env_prod = mkProd (Context.annotR (Name.Name env_name), TypeGen.sem_env_type TypeGen.val_type, env_subst) in
+  let env_prod = mkProd (annotR (Name.Name env_name), TypeGen.sem_env_type TypeGen.val_type, env_subst) in
 
   let all_pats = List.flatten pat_str_names in
   let pat_str_subst = Vars.subst_vars sigma (List.rev all_pats) env_prod in
-  let pat_str_prod = it_mkProd pat_str_subst (List.combine (List.map (fun id -> Name.Name id |> Context.annotR) all_pats) (List.init (List.length all_pats) (fun _ -> TypeGen.string_type)) |> List.rev) in
+  let pat_str_prod = it_mkProd pat_str_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) all_pats) (List.init (List.length all_pats) (fun _ -> TypeGen.string_type)) |> List.rev) in
 
   let orig_subst = Vars.subst_var sigma orig_name pat_str_prod in
-  let orig_prod = mkProd (Name orig_name |> Context.annotR, mkVar result_name, orig_subst) in
+  let orig_prod = mkProd (Name orig_name |> annotR, mkVar result_name, orig_subst) in
 
   let matched_subst = Vars.subst_var sigma matched_name orig_prod in
-  let matched_prod = mkProd (Name matched_name |> Context.annotR, matched_type, matched_subst) in
+  let matched_prod = mkProd (Name matched_name |> annotR, matched_type, matched_subst) in
 
   let b_subst = Vars.subst_vars sigma (List.rev b_names) matched_prod in
-  let b_prod = it_mkProd b_subst (List.combine (List.map (fun id -> Name.Name id |> Context.annotR) b_names) b_types |> List.rev) in
+  let b_prod = it_mkProd b_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) b_names) b_types |> List.rev) in
 
   let mat_c_names = mat::c_names in
   let c_mat_subst = Vars.subst_vars sigma (List.rev (mat_c_names)) b_prod in
-  let c_mat_prod = it_mkProd c_mat_subst (List.combine (List.map (fun id -> Name.Name id |> Context.annotR) mat_c_names) (List.init (List.length mat_c_names) (fun _ -> TypeGen.exp_type)) |> List.rev) in
+  let c_mat_prod = it_mkProd c_mat_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) mat_c_names) (List.init (List.length mat_c_names) (fun _ -> TypeGen.exp_type)) |> List.rev) in
 
   let res_inv_subst = Vars.subst_var sigma result_invariant_name c_mat_prod in
-  let res_inv_prod = mkProd (Name result_invariant_name |> Context.annotR, result_invariant_type, res_inv_subst) in
+  let res_inv_prod = mkProd (Name result_invariant_name |> annotR, result_invariant_type, res_inv_subst) in
 
   let param_invs_subst = Vars.subst_vars sigma (List.rev refinement_invariant_names) res_inv_prod in
-  let param_invs_prod = it_mkProd param_invs_subst (List.combine (List.map (fun id -> Name id |> Context.annotR) refinement_invariant_names) refinement_invariant_types |> List.rev) in
+  let param_invs_prod = it_mkProd param_invs_subst (List.combine (List.map (fun id -> Name id |> annotR) refinement_invariant_names) refinement_invariant_types |> List.rev) in
 
   let result_and_params = List.append param_names [result_name] in
   let param_result_subst = Vars.subst_vars sigma (List.rev result_and_params) param_invs_prod in
   let param_result_prod = it_mkProd param_result_subst
-      (List.combine (List.map (fun id -> Name id |> Context.annotR) result_and_params)
+      (List.combine (List.map (fun id -> Name id |> annotR) result_and_params)
          (List.init (List.length result_and_params) (fun _ -> result_type)) |> List.rev) in
 
   param_result_prod

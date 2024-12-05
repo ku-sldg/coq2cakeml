@@ -14,7 +14,7 @@ let get_type module_name type_name =
                                                else type_name)
   in
   let typ = Smartlocate.global_inductive_with_alias type_qualid in
-  mkInd typ
+  mkIndU(typ, EInstance.empty)
 
 
 let coq_init_mod = "Coq.Init.Datatypes"

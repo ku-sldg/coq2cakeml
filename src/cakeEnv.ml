@@ -10,7 +10,7 @@ let empty_namespace =
 let init_state_fun =
   Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "EvaluateDecsWrapper.init_st")
 
-let mk_init_state = mkApp (mkConst init_state_fun, [|TypeGen.nat_type; TermGen.get_nat_constr "O" |])
+let mk_init_state = mkApp (mkConstU (init_state_fun, EInstance.empty), [| TypeGen.nat_type; TermGen.get_nat_constr "O" |])
 let mk_state clk refs ffi ityp iexn =
   mkApp (get_constant "SemanticsAux" "Build_state", [|nat_type; clk; refs; ffi; ityp; iexn|])
 
@@ -21,16 +21,16 @@ let eval_decs_wrapper =
   Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "EvaluateDecsWrapper.eval_decs_wrapper")
 
 let apply_extend_dec_env new_env sem_env =
-  mkApp (mkConst extend_dec_env,[|TypeGen.val_type; new_env; sem_env|])
+  mkApp (mkConstU (extend_dec_env, EInstance.empty), [| TypeGen.val_type; new_env; sem_env |])
 
-let mk_empty_namespace mType nType vType = mkApp(mkConst empty_namespace,[|mType; nType; vType|])
+let mk_empty_namespace mType nType vType = mkApp (mkConstU (empty_namespace, EInstance.empty),[| mType; nType; vType |])
 
 let add_value_to_sem_env name cake_val sem_env =
   ()
 let add_constructor_to_sem_env name cake_constructor sem_env =
   ()
 
-let mk_empty_sem_env = mkApp(mkConst empty_sem_env,[|TypeGen.val_type|])
+let mk_empty_sem_env = mkApp (mkConstU (empty_sem_env, EInstance.empty), [| TypeGen.val_type |])
 
 let coq_fst sigma pair =
   let hd, args = destApp sigma pair in

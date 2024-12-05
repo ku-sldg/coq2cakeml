@@ -8,7 +8,7 @@ open TermGen
 
 let eval_dec decs env =
   let eval_decs_wrapper = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "EvaluateDecsWrapper.eval_decs_wrapper") in
-  mkApp (mkConst eval_decs_wrapper, [| mk_init_state; env; TermGen.list_to_coq_list decs TypeGen.dec_type |])
+  mkApp (mkConstU (eval_decs_wrapper, EInstance.empty), [| mk_init_state; env; TermGen.list_to_coq_list decs TypeGen.dec_type |])
 
 let create_certificate_theorem env cake_env term =
   let sigma = Evd.from_env env in
@@ -24,7 +24,7 @@ let create_certificate_theorem env cake_env term =
 
 (* Definition DECL (st : state ST) (env : sem_env val) (decs : list dec) (st' : state ST) (env' : sem_env val) *)
 let create_decl_indiv_certificate_theorem start_st start_env dec final_st final_env =
-  let decl_constant = mkConst (Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "DECL")) in
+  let decl_constant = mkConstU (Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "DECL"), EInstance.empty) in
   mkApp (decl_constant,
          [| start_st; start_env;
             list_to_coq_list [dec] TypeGen.dec_type;

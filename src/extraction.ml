@@ -102,7 +102,7 @@ let rec translate_term env term =
          3. extract the branch with an environment extended by the number of args
          4. construct the final pattern match *)
 
-      let args, term = decompose_lam_n_decls sigma (info.ci_cstr_nargs.(i)) branches_as_functions.(i) in
+      let args, term = decompose_lambda_n_assum sigma (info.ci_cstr_nargs.(i)) branches_as_functions.(i) in
 
       let env' = List.fold_right push_rel
           (* (List.map (fun (n,t) -> Context.Rel.Declaration.LocalAssum (n,t)) args) *)
@@ -146,7 +146,8 @@ let rec translate_term env term =
   | CoFix _
   | Int _
   | Float _
-  | Array _ -> assert false
+  | Array _
+  | String _ -> assert false
 
 and translate_constructor env constructor args =
   let sigma = Evd.from_env env in
@@ -166,7 +167,7 @@ and translate_constructor env constructor args =
     mkApp (get_exp_constr "ECon", [| mkApp(get_option_constr "Some", [|ident_str_type; cake_id|]); list_to_coq_list args' exp_type|])
 
   else
-    let constructor = mkConstruct constructor_name in
+    let constructor = mkConstructU (constructor_name, EInstance.empty) in
     (* let constructor_type = (Typeops.infer env constructor).uj_type in *)
     let sigma',constructor_type = Typing.type_of ~refresh:true env sigma constructor  in
     let eta_expanded_term = Reduction.eta_expand env (EConstr.to_constr sigma constructor) (EConstr.to_constr sigma' constructor_type) in
@@ -356,7 +357,7 @@ let translate_type_synonym env name term typ =
   let sigma = Evd.from_env env in
   let normalized_term = Reduction.eta_expand env term typ |> EConstr.of_constr in
   let i = Termops.nb_lam sigma normalized_term in
-  let (context,end_term) = EConstr.decompose_lam_n_assum sigma i normalized_term in
+  let (context,end_term) = EConstr.decompose_lambda_n_decls sigma i normalized_term in
   let vars = NameManip.context_to_var_names context |>
              List.map str_to_coq_str |>
              (fun x -> list_to_coq_list x string_type)

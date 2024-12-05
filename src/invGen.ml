@@ -28,7 +28,7 @@ let refinement_invariant env name =
   let mut_body = Environ.lookup_mind name env in
   let is_recursive = mut_body.mind_finite <> BiFinite in
   let one_body = mut_body.mind_packets.(0) in
-  let params = mut_body.mind_params_ctxt |> of_rel_context in
+  let params = mut_body.mind_params_ctxt |> EConstr.of_rel_context in
 
   let nparams = mut_body.mind_nparams in
 
@@ -40,7 +40,7 @@ let refinement_invariant env name =
 
   let invs = List.map (fun decl -> let open Context.Rel.Declaration in
                         let inv_name = Nameops.add_suffix (get_name decl |> id_of_name) "_INV" |> Names.Name.mk_name in
-                        LocalAssum (Context.annotR inv_name, arb_inv_type (mkRel nparams))) params in
+                        LocalAssum (EConstr.annotR inv_name, arb_inv_type (mkRel nparams))) params in
 
   let params_and_invs = invs @ params in
   let env' = push_rel_context params_and_invs env in
@@ -49,13 +49,13 @@ let refinement_invariant env name =
   let init_args = fun body -> it_mkLambda_or_LetIn body params_and_invs in
 
   (* need better checking for non parameterized types *)
-  let decreasing_arg_type = Reductionops.beta_applist sigma ((mkInd (name,0)), (List.init nparams (fun i -> mkRel (2 * nparams - i)))) in
-  let decreasing_arg_name = Namegen.hdchar env (Evd.from_env env) decreasing_arg_type |> Names.Id.of_string |> Context.annotR in
+  let decreasing_arg_type = Reductionops.beta_applist sigma ((mkIndU ((name,0), EInstance.empty)), (List.init nparams (fun i -> mkRel (2 * nparams - i)))) in
+  let decreasing_arg_name = Namegen.hdchar env (Evd.from_env env) decreasing_arg_type |> Names.Id.of_string |> EConstr.annotR in
 
-  let fix_name = Nameops.add_suffix (one_body.mind_typename) "_INV" |> Names.Name.mk_name |> Context.annotR in
+  let fix_name = Nameops.add_suffix (one_body.mind_typename) "_INV" |> Names.Name.mk_name |> EConstr.annotR in
   let fix_type = mkNamedProd sigma decreasing_arg_name decreasing_arg_type (mkArrowR (TypeGen.val_type) mkProp) in
 
-  let val_name = Names.Id.of_string "v" |> Context.annotR in
+  let val_name = Names.Id.of_string "v" |> EConstr.annotR in
 
   let decreasing_arg_type = Vars.lift 1 decreasing_arg_type in
   let fix_body = fun body -> mkNamedLambda sigma decreasing_arg_name decreasing_arg_type (mkNamedLambda sigma val_name (TypeGen.val_type) body) in
@@ -93,7 +93,7 @@ let refinement_invariant env name =
         let global_env = Global.env () in
         let possible_inv_id = Nameops.add_suffix (Environ.lookup_mind (fst typ_name) global_env).mind_packets.(0).mind_typename "_INV" in
         begin
-          try mkConst (Nametab.locate_constant (Libnames.qualid_of_ident possible_inv_id))
+          try mkConstU ((Nametab.locate_constant (Libnames.qualid_of_ident possible_inv_id)), EInstance.empty)
           with Not_found -> Feedback.msg_info
                               (Pp.str (String.concat "" [(Names.Id.to_string possible_inv_id); " was not found in the current environment."]));
             raise (GenEx "refinement invariant: missing invariant")
@@ -121,7 +121,7 @@ let refinement_invariant env name =
 
     | Const (name,univ) ->
       let inv_id = NameManip.constant_inv_name name in
-      mkConst (Libnames.qualid_of_ident inv_id |> Smartlocate.global_constant_with_alias)
+      mkConstU (Libnames.qualid_of_ident inv_id |> Smartlocate.global_constant_with_alias, EInstance.empty)
 
     | _ ->  raise (Unimplemented "mkinv: funny business, TJ fix ur 'things'")
   in
@@ -155,7 +155,7 @@ let refinement_invariant env name =
       else
         fun body -> TypeGen.ex_type typ (mkLambda (Names.Id.of_string (String.concat "" ["v"; string_of_int index]) |>
                                                     Names.Name.mk_name |>
-                                                    Context.annotR, typ, build_existentials typ (index + 1) body))
+                                                    EConstr.annotR, typ, build_existentials typ (index + 1) body))
     in
     let existentials = build_existentials (TypeGen.val_type) 0 in
     let cake_val =
@@ -174,15 +174,15 @@ let refinement_invariant env name =
   in
 
   let open Inductiveops in
-  let ind_type = make_ind_type (make_ind_family (Univ.in_punivs (name,0), Array.init mut_body.mind_nparams (fun i -> Constr.mkRel (2 * mut_body.mind_nparams - i + offset)) |> Array.to_list), []) in
-  let case_info = make_case_info env (name,0) Sorts.Relevant Constr.RegularStyle in (* might switch case style once branches are properly instantiated *) (* lol no *)
-  let return =  EConstr.mkLambda (Context.anonR, Vars.lift 2 decreasing_arg_type, EConstr.mkProp) in
+  let ind_type = make_ind_type (make_ind_family (((name,0), EInstance.empty), Array.init mut_body.mind_nparams (fun i -> EConstr.mkRel (2 * mut_body.mind_nparams - i + offset)) |> Array.to_list), []) in
+  let case_info = make_case_info env (name,0) Constr.RegularStyle in (* might switch case style once branches are properly instantiated *) (* lol no *)
+  let return =  EConstr.mkLambda (EConstr.anonR, Vars.lift 2 decreasing_arg_type, EConstr.mkProp) in
 
   let consargs = Array.map fst one_body.mind_nf_lc |> Array.map EConstr.of_rel_context in
   let consnames = one_body.mind_consnames |> Array.map Names.Id.to_string in
   let branches = Array.map2 mk_branch consargs consnames in
 
-  let match_exp = make_case_or_project env (Evd.from_env env) ind_type case_info return (EConstr.mkRel 2) branches in
+  let match_exp = make_case_or_project env (Evd.from_env env) ind_type case_info (return, ERelevance.relevant) (EConstr.mkRel 2) branches in
 
   let func_hd = fun body -> (init_args (fix body)) in
 
@@ -225,7 +225,7 @@ let rec invariant_from_type env typ =
   | Ind (name,_) ->
     let possible_inv_id = Nameops.add_suffix (Environ.lookup_mind (fst name) (Global.env ())).mind_packets.(0).mind_typename "_INV" in
         begin
-          try mkConst (Nametab.locate_constant (Libnames.qualid_of_ident possible_inv_id))
+          try mkConstU (Nametab.locate_constant (Libnames.qualid_of_ident possible_inv_id), EInstance.empty)
           with Not_found ->
             begin
               Feedback.msg_info
@@ -244,13 +244,13 @@ let rec invariant_from_type env typ =
                      Id.of_string  in
       let inv_name = Name inv_id in
 
-      let inv_type = mkProd(Context.annotR Name.Anonymous,mkRel 1,
-                            mkProd(Context.annotR Name.Anonymous,TypeGen.val_type,mkProp)) in
+      let inv_type = mkProd(EConstr.annotR Name.Anonymous,mkRel 1,
+                            mkProd(EConstr.annotR Name.Anonymous,TypeGen.val_type,mkProp)) in
       let body_inv' = Vars.subst_var sigma' (id_of_name ~anon:"ANON" name.binder_name) body_inv in
       let body_inv'' = Vars.lift 1 body_inv' in
       let body_inv''' = Vars.subst_var sigma' inv_id body_inv'' in
 
-      mkProd (name, typ', mkProd (Context.annotR inv_name, inv_type, body_inv'''))
+      mkProd (name, typ', mkProd (EConstr.annotR inv_name, inv_type, body_inv'''))
     else
       let vard_type = rels_to_vars env typ' in
       let vard_body = rels_to_vars env' body in
@@ -268,11 +268,11 @@ let rec invariant_from_type env typ =
 
   | Const (constname,univ) ->
     let inv_id = NameManip.constant_inv_name constname in
-    mkConst (Libnames.qualid_of_ident inv_id |> Smartlocate.global_constant_with_alias)
+    mkConstU (Libnames.qualid_of_ident inv_id |> Smartlocate.global_constant_with_alias, EInstance.empty)
 
   | Lambda _ ->
     let sigma = Evd.from_env env in
-    let ctxt,body = EConstr.decompose_lam sigma typ in
+    let ctxt,body = EConstr.decompose_lambda sigma typ in
 
     let env' = EConstr.push_rel_context (List.map (fun (x,y) -> LocalAssum (x,y)) ctxt) env in
 
@@ -282,11 +282,10 @@ let rec invariant_from_type env typ =
 
     let param_names = List.map fst ctxt in
     let param_inv_names = List.map (fun name ->
-        let open Context in
-        name.binder_name |>
+        Context.(name.binder_name) |>
         id_of_name ~anon:"ANON" |>
         (fun id -> Nameops.add_suffix id "_INV") |>
-        fun x -> Names.Name.Name x |> annotR) param_names
+        fun x -> Names.Name.Name x |> EConstr.annotR) param_names
     in
 
     let param_and_inv_names = List.map (fun x -> Context.(x.binder_name) |> id_of_name) (param_inv_names @ param_names) in
@@ -313,7 +312,7 @@ let generate_refinement_invariant r =
   match glob_ref with
   | IndRef (mutname,index) ->
     if index > 0 then raise (UnsupportedFeature "Mutually Recursive types are not supported");
-    if not (Hipattern.is_nodep_ind global_env sigma (mkInd (mutname,index))) then raise (UnsupportedFeature "Dependent types are not supported");
+    if not (Hipattern.is_nodep_ind global_env sigma (mkIndU ((mutname,index), EInstance.empty))) then raise (UnsupportedFeature "Dependent types are not supported");
     let ref_inv = refinement_invariant global_env mutname in
     let sigma',dec_type = Typing.type_of ~refresh:true global_env sigma ref_inv in
     let dec_name = Nameops.add_suffix (Environ.lookup_mind mutname global_env).mind_packets.(0).mind_typename "_INV" in

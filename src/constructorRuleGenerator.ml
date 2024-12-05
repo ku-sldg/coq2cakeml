@@ -98,9 +98,9 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
   let final_inv = InvGen.invariant_from_type (EConstr.push_rel_context (EConstr.of_rel_context args) env) (EConstr.of_constr final_typ) in
   let param_names = List.map (fun x -> get_name x |> NameManip.id_of_name |> mkVar) params in
   let cons_term = if List.length args > 0 then
-      mkApp (mkConstruct cname, Array.of_list (List.concat [param_names; arg_vars]))
+      mkApp (mkConstructU (cname, EInstance.empty), Array.of_list (List.concat [param_names; arg_vars]))
     else
-      mkConstruct cname
+      mkConstructU (cname, EInstance.empty)
   in
   let cake_const_name = NameManip.cakeml_constructor_string (Names.Id.to_string (one_ind_body.mind_consnames.(index)))  in
   let cake_cons_term = mkApp (get_exp_constr "ECon",
@@ -159,12 +159,12 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
   (* param *)
   let prod_params = params in
   (* param_inv  *)
-  let prod_param_invs = List.map (fun x -> Context.Rel.Declaration.LocalAssum (NameManip.name_string_map (get_name x) (fun s -> String.concat "" [s; "_INV"]) |> Context.annotR,
+  let prod_param_invs = List.map (fun x -> Context.Rel.Declaration.LocalAssum (NameManip.name_string_map (get_name x) (fun s -> String.concat "" [s; "_INV"]) |> annotR,
                                                                                arb_inv_type (mkVar (get_name x |> NameManip.id_of_name)))) params in
   (* env *)
-  let prod_env = [Context.Rel.Declaration.LocalAssum (Context.annotR (Names.Name (Names.Id.of_string "env")), sem_env_type val_type)] in
+  let prod_env = [Context.Rel.Declaration.LocalAssum (annotR (Names.Name (Names.Id.of_string "env")), sem_env_type val_type)] in
   (* exps *)
-  let prod_exps = List.map2 (fun x y -> Context.Rel.Declaration.LocalAssum (Names.Name x |> Context.annotR, y)) arg_exp_names (List.init (List.length arg_exp_names) (fun _ -> exp_type)) in
+  let prod_exps = List.map2 (fun x y -> Context.Rel.Declaration.LocalAssum (Names.Name x |> annotR, y)) arg_exp_names (List.init (List.length arg_exp_names) (fun _ -> exp_type)) in
 
   (* args *)
   let rec replace_rels_with_vars env typ =

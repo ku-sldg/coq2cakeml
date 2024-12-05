@@ -8,7 +8,7 @@ let get_constructor module_name constructor_name =
                                                 else constructor_name)
   in
   let constr = Smartlocate.global_constructor_with_alias const_qualid in
-  mkConstruct constr
+  mkConstructU(constr, EInstance.empty)
 
 let get_nat_constr cname = get_constructor "" cname
 
@@ -107,7 +107,7 @@ let get_constant module_name identifier_name =
                                                 else identifier_name)
   in
   let constant = Smartlocate.global_constant_with_alias const_qualid in
-  mkConst constant
+  mkConstU(constant,EInstance.empty)
 
 let mk_nsBind = get_constant "Namespace" "nsBind"
 let mk_extend_dec_env = get_constant "SemanticsAux" "extend_dec_env"
