@@ -1,5 +1,13 @@
-Require Import CakeMLExtraction.Loader.
+(* Start: Need to be here because I do not handle the Synterp stuff correctly yet *)
+Require Import Strings.String.
+Require Import CakeSem.CakeAST.
+Require Import CakeSem.SemanticsAux.
+Require Import CakeSem.Namespace.
 Require Import CakeMLExtraction.RefineInv.
+Require Import EvaluateDecsWrapper.
+(* End: Need to be here because I do not handle the Synterp stuff correctly yet *)
+
+Require Import CakeMLExtraction.Loader.
 Require Import Lists.List.
 Import ListNotations.
 Require Import Strings.String.
@@ -37,7 +45,7 @@ Ltac handle_good_cons :=
       let Hstamp  := fresh "Hstamp" in
       destruct H1 as [con_name [ps [ty [Hps [HNo_Dup [Hlookup Hstamp]]]]]];
       inv Hps;
-      apply EqNat.beq_nat_true_stt in Hstamp;
+      apply PeanoNat.Nat.eqb_eq in Hstamp;
       subst
   | [good_cons : Forall ?P [] |- _ ] => clear good_cons
   end.

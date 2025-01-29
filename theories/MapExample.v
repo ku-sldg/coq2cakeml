@@ -1,5 +1,13 @@
-Require Export Loader. (* I'd like this to be Coq2CakeML *)
+(* Start: Need to be here because I do not handle the Synterp stuff correctly yet *)
+Require Import Strings.String.
+Require Import CakeSem.CakeAST.
+Require Import CakeSem.SemanticsAux.
+Require Import CakeSem.Namespace.
+Require Import CakeMLExtraction.RefineInv.
+Require Import EvaluateDecsWrapper.
+(* End: Need to be here because I do not handle the Synterp stuff correctly yet *)
 
+Require Export Loader. (* I'd like this to be Coq2CakeML *)
 
 Require Import CakeSem.Namespace.
 Require Import CakeSem.CakeAST.
@@ -14,12 +22,11 @@ Require Import Lia.
 Require Import Strings.String.
 Open Scope string_scope.
 
-Require Import ExampleInv.
 Require Import Tactics.
 
 Require Import Extraction.
 
-PrintInvariant list.
+ENV_INIT.
 GenerateInvariant list.
 
 GenerateConstLemma nil.
@@ -90,70 +97,148 @@ Qed.
 
 GenerateInvariant nat.
 
+
+Fixpoint my_map (A B : Type) (f : A -> B) l :=
+  match l with
+  | [] => []
+  | x::xs => (f x)::(my_map A B f xs)
+  end.
+
+GenerateCertificate my_map.
+Proof.
+  intros A A_INV B B_INV.
+  apply EVAL_ELetrec_noEQ.
+  intros f v f_INV.
+  apply EVAL_remove_EQ; try repeat constructor.
+  intros la.
+  apply EVAL_EFun.
+  intro la'.
+  generalize dependent f.
+  generalize dependent v.
+  generalize dependent la'.
+  induction la.
+  - intros la' v f f_INV v0 v0_INV.
+    apply (EVAL_EMat_list _ _ A_INV _ _ _ _ [] (fun x xs => (f x)::(my_map A B f xs)) []).
+    * inv v0_INV. reflexivity.
+    * good_cons_env_solve.
+    * apply EVAL_EVar with v0; try reflexivity; try assumption.
+      inv v0_INV.
+      assumption.
+    * intro.
+      apply EVAL_ECon_nil.
+      reflexivity.
+    * intros a aa b bb contra.
+      inv contra.
+  - intros la' v f f_INV v0 v0_INV.
+    apply (EVAL_EMat_list _ _ A_INV _ _ _ _ [] (fun x xs => (f x)::(my_map A B f xs)) (a::la)).
+    * inv v0_INV. reflexivity.
+    * good_cons_env_solve.
+    * apply EVAL_EVar with v0; try reflexivity; try assumption.
+      inv v0_INV. assumption.
+    * intro contra. inv contra.
+    * intros a' as' v' vs' Heq INV_v' INV_vs'.
+      apply EVAL_ECon_cons.
+      + reflexivity.
+      + eapply EVAL_EApp_Opapp.
+        -- apply EVAL_EVar with v; try reflexivity; try assumption.
+           apply f_INV.
+        -- apply EVAL_EVar with v'; try reflexivity; try assumption.
+      + eapply EVAL_EApp_Opapp.
+        -- eapply EVAL_EApp_Opapp.
+           ++ eapply EVAL_EVar_Recclosure.
+              reflexivity.
+              intros.
+              apply EVAL_EFun.
+              intros.
+              unfold my_map.
+              apply IHla.
+              apply H.
+              apply H0.
+           ++ apply EVAL_EVar with v; try reflexivity; try assumption.
+              split. reflexivity.
+              apply f_INV.
+        -- apply EVAL_EVar with vs'; try reflexivity; try assumption.
+           split.
+           inv Heq. reflexivity.
+           apply INV_vs'.
+Qed.
+
+(* (* Playin *) *)
+
+Theorem EVAL_EVar_Recclosure2
+     : forall (A B : Type) (AINV : A -> val -> Prop) (BINV : B -> val -> Prop)
+         (f : A -> B) (fname name : tvarN) (body : exp) (env cl_env : sem_env val),
+       nsLookup ident_string_beq (Short fname) (sev env) =
+       Some (Recclosure cl_env [(fname, name, body)] fname) ->
+       (forall (n : A) (v : val),
+        AINV n v ->
+        EVAL
+          (bind_variable_name name v
+             (update_sev cl_env (build_rec_env [(fname, name, body)] cl_env (sev cl_env)))) body
+          (BINV (f n))) -> EVAL env (EVar (Short fname)) (FUNC AINV BINV f).
+Proof.
+  intros.
+  unfold EVAL in *.
+  unfold evaluate in *.
+  intros.
+  eexists.
+  eexists.
+  eexists.
+  split.
+  simp eval_or_match; simpl.
+  rewrite H. simpl.
+  reflexivity.
+  unfold FUNC.
+  intros x v H1.
+  assert (H0' := (H0 x v (H1) st)).
+  destruct H0' as [v0 [f0 [st' [Hevalv0 HINVv0]]]].
+  eexists.
+  split.
+  - apply HINVv0.
+  - unfold app_returns.
+    intros v1 HINVv1 st0.
+    assert (H0'' := (H0 x v1 (HINVv1) st0)).
+    destruct H0'' as [v0' [f0' [st'' [Hevalv1 HINVv1']]]].
+    do 3 eexists.
+    eexists.
+    split.
+    simpl.
+    rewrite String.eqb_refl.
+    reflexivity.
+    split.
+    unfold eval_rel.
+    unfold evaluate.
+    eexists.
+    apply Hevalv1.
+    apply HINVv1'.
+    Unshelve. constructor.
+Qed.
+
+(*   (* Done Playin *) *)
+
 Require Import CakeSem.Evaluate.
 GenerateCertificate map.
 Obligations.
-(* (* messing around *) *)
-(*   intros A AINV B BINV. *)
-(*   apply EVAL_EFun. *)
-(*   intros f v H. *)
-(*   Search "ELetrec". *)
-(*   apply EVAL_ELetrec_noEQ. *)
-(*   intros n. *)
-(*   induction n. *)
-(*     * intros u H'. *)
-(*       apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(map f l)) []. *)
-(*       + reflexivity. *)
-(*       + good_cons_env_solve. *)
-(*       + apply EVAL_EVar with u; try reflexivity; try assumption. *)
-(*       + intro. *)
-(*         eapply EVAL_ECon_nil. *)
-(*         reflexivity. *)
-(*       + intros aa ab ac ad contra. *)
-(*         inv contra. *)
-(*     * intros u H'. *)
-(*       apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(map f l)) (a::n). *)
-(*       + reflexivity. *)
-(*       + good_cons_env_solve. *)
-(*       + eapply EVAL_EVar; try reflexivity; try assumption. *)
-(*       + intro contra. inv contra. *)
-(*       + intros. *)
-(*         eapply EVAL_ECon_cons. *)
-(*         -- reflexivity. *)
-(*         -- eapply EVAL_EApp_Opapp. *)
-(*            ** apply EVAL_EVar with v;try reflexivity; try assumption. *)
-(*               apply H. *)
-(*            ** eapply EVAL_EVar ; try reflexivity; try assumption. *)
-(*         -- eapply EVAL_EApp_Opapp. *)
-(*            ** *)
-(*               eapply EVAL_EVar_Recclosure. *)
-(*               ++ intros. *)
-(*                  reflexivity. *)
-(*               ++ apply IHn. *)
-(*            ** eapply EVAL_EVar; try reflexivity; try assumption. *)
-(*               unfold EQ. split; inv H0; try reflexivity; try assumption. *)
-
-(*       (* end messing *) *)
-  intros A AINV B BINV.
-  apply EVAL_EFun.
+intros A AINV B BINV.
+apply EVAL_EFun.
   intros f v H.
   apply EVAL_remove_EQ.
   - constructor. constructor.
   - intros x.
     apply EVAL_ELetrec.
-    induction x.
+    induction x as [| a x'].
     * intros u H'.
       apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(map f l)) [].
       + reflexivity.
       + good_cons_env_solve.
-      + apply EVAL_EVar with u; try reflexivity; try assumption.
+      + apply EVAL_EVar with u; [reflexivity|assumption].
       + intro.
         eapply EVAL_ECon_nil.
         reflexivity.
       + intros aa ab ac ad contra.
         inv contra.
     * intros u H'.
-      apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(map f l)) (a::x).
+      apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(map f l)) (a::x').
       + reflexivity.
       + good_cons_env_solve.
       + eapply EVAL_EVar; try reflexivity; try assumption.
@@ -169,7 +254,7 @@ Obligations.
            ** eapply EVAL_EVar_Recclosure.
               ++ intros.
                  reflexivity.
-              ++ apply IHx.
+              ++ apply IHx'.
            ** eapply EVAL_EVar; try reflexivity; try assumption.
               unfold EQ. split; inv H0; try reflexivity; try assumption.
 Qed.
@@ -184,65 +269,10 @@ Proof.
   reflexivity.
 Qed.
 
-Theorem DECL_cons' : forall (st : state ST) (env : sem_env val) (d : dec) (ds : list dec)
-                       (st' st'' : state ST) (env' env'' env''' : sem_env val),
-    DECL st env [d] st' env' ->
-    DECL st' (extend_dec_env env' env) ds st'' env'' ->
-    env''' = (extend_dec_env env'' env') ->
-    DECL st env (d :: ds) st'' env'''.
-Proof.
-  intros.
-
-  subst.
-  eapply DECL_cons.
-  apply H.
-  apply H0.
-Qed.
-
-Theorem DECL_Dlet_Dletrec :
-  forall (st st' : state nat) (env env' : sem_env val) locs (funname var : tvarN) (e : exp),
-    DECL st env [Dlet locs (Pvar funname) (ELetrec [(funname, var, e)] (EVar (Short funname)))] st' env'
-    <->
-      DECL st env [Dletrec locs [(funname, var, e)]] st' env'.
-Proof.
-  intros.
-  unfold DECL.
-  split; intros; destruct H as [f H]; exists f.
-  rewrite <- singular_rec_fun_equiv_DLet_DLetrec; assumption.
-  rewrite singular_rec_fun_equiv_DLet_DLetrec; assumption.
-Qed.
-Theorem DECL_Dtabbrev : forall (st : state ST) (env : sem_env val) l tvs tn ast,
-    DECL st env [Dtabbrev l tvs tn ast] st empty_sem_env.
-Proof.
-  intros.
-  unfold DECL.
-  exists 0.
-  simp evaluate_decs. simpl.
-  reflexivity.
-Qed.
-
-Ltac next :=
-  match goal with
-  | |- DECL ?st ?env [Dtype ?l ?td] ?st' ?env' => apply DECL_Dtype; try NoDup_solve
-  | |- DECL ?st ?env [Dtabbrev ?l ?tvs ?tn ?ast] ?st' ?env' => apply DECL_Dtabbrev
-  | |- DECL ?st ?env [Dlet ?l (Pvar ?n) (ELetrec [(?n,?v,?b)] (EVar (Short ?n)) ) ] ?st' ?env' =>
-      rewrite DECL_Dlet_Dletrec;
-      eapply DECL_Dletrec
-  | |- DECL ?st ?env [?d] ?st' ?env' => fail 1
-  | |- DECL ?st ?env (?d::?ds) ?st' ?env' => eapply DECL_cons'
-  end;
-  unfold state_update_next_type_stamp;
-  unfold extend_dec_env;
-  simpl.
-
 FinishProgram "map".
 Obligations.
-simpl.
-next.
-next.
-next.
-next.
+simpl;
+  repeat (next; try reflexivity).
 apply DECL_indiv_map_cert_thm.
-reflexivity.
 reflexivity.
 Qed.

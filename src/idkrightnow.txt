@@ -1,0 +1,26 @@
+HAVE:
+   [PARAM1, PARAM2, PARAM3, arg1, arg2, ... argn, TYPE]
+ OR
+  [argn, ..., arg2, arg1, PARAMm, ... PARAM1], TYPE
+
+
+WANT:
+  arg1 -> arg2 -> ... -> argn -> RESULT_TYPE
+
+NEED TO UNDERSTAND:
+  any arg might have the type of a PARAM and is indexed by DeBruijn number
+
+NEED TO USE:
+  PARAMS and RESULT_TYPE are mkRels
+  PARAMS are base 0,1, so that's easy
+  RESULT_TYPE is #PARAMS+1
+
+ - index (within constructor)
+ - index (which constructor/within type)
+ - number of PARAMs
+ - 1 for mat, 1 for RESULT_TYPE, 1 for RESULT_TYPE_INV
+ -
+
+taking the second representation,
+
+List.chop #args rep = (x,_)

@@ -8,7 +8,6 @@ open TypeGen
 open TermGen
 open PrintDebug
 
-
 let locate_global_ref qid =
   let ro =
     try Some (Smartlocate.global_with_alias qid)

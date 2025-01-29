@@ -30,12 +30,15 @@ let create_decl_indiv_certificate_theorem start_st start_env dec final_st final_
             list_to_coq_list [dec] TypeGen.dec_type;
             final_st; final_env |])
 
-let _ = Declare.declare_definition
-    ~info:(Declare.Info.make ())
-    ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string !curr_env_name) ~typ:(Some (TypeGen.sem_env_type TypeGen.val_type)) ())
-    ~opaque:false
-    ~body:mk_empty_sem_env
-    (Evd.from_env (Global.env ()))
+(* hack cause otherwise synterp fails *)
+let init_cake_env () =
+  let _ = Declare.declare_definition
+      ~info:(Declare.Info.make ())
+      ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string !curr_env_name) ~typ:(Some (TypeGen.sem_env_type TypeGen.val_type)) ())
+      ~opaque:false
+      ~body:mk_empty_sem_env
+      (Evd.from_env (Global.env ()))
+  in ()
 
 let mk_updated_environment ref cake_env_constant =
   let glob_ref = locate_global_ref ref in

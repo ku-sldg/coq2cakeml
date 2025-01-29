@@ -428,7 +428,7 @@ Proof.
     destruct r.
 
     assert (copyHeqp0 : (s1, Rval s2) = evaluate_decs fuel s (extend_dec_env s0 env) (d2 :: decl')) by assumption.
-    rewrite Heqp0 in Heqp0.
+    symmetry in Heqp0.
     eapply H0 in Heqp0.
     rewrite Heqp0.
     inv H1.
@@ -437,8 +437,6 @@ Proof.
     constructor.
     constructor.
     constructor.
-    symmetry. assumption.
-    reflexivity.
     inv H1.
     inv H1.
 Qed.
@@ -907,6 +905,9 @@ Proof.
                  unfold term10 in Heval.
                  simp eval_or_match in Heval.
                  simp eval_or_match in Heval.
+                 simpl in *.
+                 assumption.
+                 apply feqINV.
               ** unfold term6.
                  eapply EVAL_EVar.
                  solve_nsLookup.
