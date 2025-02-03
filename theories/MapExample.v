@@ -269,6 +269,8 @@ Proof.
   reflexivity.
 Qed.
 
+PrintProgram.
+
 FinishProgram "map".
 Obligations.
 simpl;

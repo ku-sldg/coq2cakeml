@@ -409,6 +409,8 @@ let translate_and_print r =
     | UnsupportedFeature error -> Feedback.msg_info (Pp.str error)
   end
 
+
+
 (* let translate_and_print r = *)
 (*   let glob_ref = locate_global_ref r in *)
 (*   let global_env = Global.env () in *)
@@ -437,6 +439,9 @@ let reset_current_program () = current_program := list_to_coq_list [] dec_type
 
 let add_dec_to_current_program dec =
   current_program := mkApp(get_list_constr "cons", [| dec_type; dec; !current_program |])
+
+let print_current_program () =
+  print_econstr !current_program
 
 let translate_and_add_to_global_environment r =
   begin try

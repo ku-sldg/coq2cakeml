@@ -27,6 +27,7 @@ VERNAC COMMAND EXTEND CakeTranslate CLASSIFIED AS QUERY
 | [ "PrintTranslation" global(x) ] -> { translate_and_print x }
 | [ "PrintInvariant" global(x) ] -> { print_refinement_invariant x }
 | [ "GenerateInvariant" global(x) ] -> { generate_invariant_and_update_environment x }
+| [ "PrintProgram" ] -> { print_current_program () }
 | [ "ENV_INIT" ] -> { init_cake_env () }
 END
 
