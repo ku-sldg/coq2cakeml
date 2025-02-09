@@ -37,7 +37,7 @@ let cakeml_variable_string str =
 let cakeml_type_variable_string str =
   (* if something then raise (NotACakeMLName str) *)
   (* let str' = ??? in *)
-  String.concat "" ["'"; str]
+  String.concat "" ["'"; cakeml_variable_string str]
 
 (* does not currently handle contexts with two of the same name *)
 let context_to_var_names context =
