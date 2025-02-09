@@ -94,6 +94,7 @@ let option_to_coq_option op typ =
   | Some x -> mkApp (get_option_constr "Some", [| typ; x |])
 
 let rec ident_of_str ?(long = []) name_str =
+  let string_type = string_type () in
   match long with
   | []   -> mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str name_str|])
   | h::t -> mkApp (get_ident_constr "Long",
@@ -110,14 +111,14 @@ let get_constant module_name identifier_name =
   let constant = Smartlocate.global_constant_with_alias const_qualid in
   mkConstU(constant,EInstance.empty)
 
-let mk_nsBind = get_constant "Namespace" "nsBind"
-let mk_extend_dec_env = get_constant "SemanticsAux" "extend_dec_env"
-let mk_nsEmpty = get_constant "Namespace" "nsEmpty"
-let mk_Build_sem_env = get_constructor "SemanticsAux" "Build_sem_env"
+let mk_nsBind () = get_constant "Namespace" "nsBind"
+let mk_extend_dec_env () = get_constant "SemanticsAux" "extend_dec_env"
+let mk_nsEmpty () = get_constant "Namespace" "nsEmpty"
+let mk_Build_sem_env () = get_constructor "SemanticsAux" "Build_sem_env"
 
-let mk_good_cons_env = get_constant "RefineInv" "good_cons_env"
+let mk_good_cons_env () = get_constant "RefineInv" "good_cons_env"
 
-let unknown_loc = list_to_coq_list [] nat_type
+let unknown_loc () = list_to_coq_list [] (nat_type ())
 
 let mkFUNC typ1 typ2 inv1 inv2 = mkApp(get_constant "RefineInv" "FUNC",[|typ1; typ2; inv1; inv2|])
 
@@ -133,7 +134,7 @@ let mk_write_rec funs cl_env env = mkApp(get_constant "EnvWrangling" "write_rec"
 
 let mk_write_c_list cs env = mkApp(get_constant "EnvWrangling" "write_c_list", [|cs; env|])
 
-let curr_env_name = ref "cake_env"
-let prev_env_name = ref "cake_env"
-let next_env_num = ref 0
-let curr_st_num = ref 0
+let curr_env_name = Summary.ref ~name:"curr_env_name" "cake_env"
+let prev_env_name = Summary.ref ~name:"prev_env_name" "cake_env"
+let next_env_num = Summary.ref ~name:"next_env_num" 0
+let curr_st_num = Summary.ref ~name:"curr_st_num" 0

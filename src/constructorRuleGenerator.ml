@@ -104,8 +104,8 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
   in
   let cake_const_name = NameManip.cakeml_constructor_string (Names.Id.to_string (one_ind_body.mind_consnames.(index)))  in
   let cake_cons_term = mkApp (get_exp_constr "ECon",
-                              [| option_to_coq_option (Some (ident_of_str cake_const_name)) ident_str_type;
-                                 list_to_coq_list arg_exps exp_type |])
+                              [| option_to_coq_option (Some (ident_of_str cake_const_name)) (ident_str_type ());
+                                 list_to_coq_list arg_exps (exp_type ()) |])
   in
 
   let conclusion = mkEVAL (mkVar (Names.Id.of_string "env")) cake_cons_term (mkApp (final_inv, [| cons_term |])) in
@@ -113,27 +113,27 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
   (* nsLookup ident_string_beq (Short "Cons") (sec env) = Some (2, TypeStamp "Cons" 0) -> *)
 
   let left_half = mkApp (get_constant "Namespace" "nsLookup",
-                              [| string_type; string_type; prod_type nat_type stamp_type;
+                              [| string_type (); string_type (); prod_type (nat_type ()) (stamp_type ());
                                  get_constant "" "ident_string_beq";
                                  ident_of_str cake_const_name;
-                                 mkApp (get_constant "" "sec", [| val_type; mkVar (Names.Id.of_string "env") |]) |])
+                                 mkApp (get_constant "" "sec", [| val_type (); mkVar (Names.Id.of_string "env") |]) |])
   in
 
   let right_half = option_to_coq_option (Some (pair_to_coq_pair (int_to_coq_nat (List.length args_no_params), mkApp (get_constructor "SemanticsAux" "TypeStamp",
                                                                                           [| str_to_coq_str cake_const_name;
                                                                                              int_to_coq_nat (!curr_st_num - 1) |]))
-                                                 nat_type stamp_type))
-                     (prod_type nat_type stamp_type)
+                                                 (nat_type ()) (stamp_type ())))
+                     (prod_type (nat_type ()) (stamp_type ()))
   in
 
-  let nsLookup_assum = mk_eq (option_type (prod_type nat_type stamp_type)) left_half right_half in
+  let nsLookup_assum = mk_eq (option_type (prod_type (nat_type ()) (stamp_type ()))) left_half right_half in
 
 
   (* now we put them all together *)
 
   let final_prop = List.fold_right mkArrowR (nsLookup_assum::arg_EVALs) conclusion in
 
-  (* add foralls and substitue *)
+  (* add foralls and substitute *)
 
   (*   forall env PARAM0 PARAM0_INV (e1 e2 : exp) a l, *)
   (* forall A ... Z A_INV ... Z_INV (or A A_INV ... Z Z_INV) env e1 .. en arg1 ... argn *)
@@ -155,16 +155,16 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
       subst_and_add_prod sigma l' (mkProd (get_annot x, Context.Rel.Declaration.get_type x, Vars.subst_var sigma id term))
   in
 
-  let arb_inv_type = fun x -> mkArrowR x (mkArrowR (val_type) mkProp) in
+  let arb_inv_type = fun x -> mkArrowR x (mkArrowR (val_type ()) mkProp) in
   (* param *)
   let prod_params = params in
   (* param_inv  *)
   let prod_param_invs = List.map (fun x -> Context.Rel.Declaration.LocalAssum (NameManip.name_string_map (get_name x) (fun s -> String.concat "" [s; "_INV"]) |> annotR,
                                                                                arb_inv_type (mkVar (get_name x |> NameManip.id_of_name)))) params in
   (* env *)
-  let prod_env = [Context.Rel.Declaration.LocalAssum (annotR (Names.Name (Names.Id.of_string "env")), sem_env_type val_type)] in
+  let prod_env = [Context.Rel.Declaration.LocalAssum (annotR (Names.Name (Names.Id.of_string "env")), sem_env_type (val_type ()))] in
   (* exps *)
-  let prod_exps = List.map2 (fun x y -> Context.Rel.Declaration.LocalAssum (Names.Name x |> annotR, y)) arg_exp_names (List.init (List.length arg_exp_names) (fun _ -> exp_type)) in
+  let prod_exps = List.map2 (fun x y -> Context.Rel.Declaration.LocalAssum (Names.Name x |> annotR, y)) arg_exp_names (List.init (List.length arg_exp_names) (fun _ -> exp_type ())) in
 
   (* args *)
   let rec replace_rels_with_vars env typ =

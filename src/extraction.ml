@@ -55,7 +55,7 @@ let rec translate_term env term =
     let cake_name =
       match name.binder_name with
       | Anonymous -> get_option_constr "None"
-      | Name id -> mkApp (get_option_constr "Some", [| string_type ;
+      | Name id -> mkApp (get_option_constr "Some", [| string_type ();
                                                        str_to_coq_str (Names.Id.to_string id) |])
     in
     (* (* Additional logic for let-fix forms *) *)
@@ -117,8 +117,8 @@ let rec translate_term env term =
                              fun x -> x.mind_consnames.(i) in
       let constr_id =
         mkApp (get_option_constr "Some",
-               [| ident_type string_type string_type;
-                  mkApp (get_ident_constr "Short", [| string_type; string_type;
+               [| ident_str_type ();
+                  mkApp (get_ident_constr "Short", [| string_type (); string_type ();
                                                       constructor_name |>
                                                       Names.Id.to_string |>
                                                       String.capitalize_ascii |>
@@ -127,11 +127,11 @@ let rec translate_term env term =
       in
 
       let constructor_pat =
-        mkApp (get_pat_constr "Pcon", [|constr_id; list_to_coq_list arg_pats pat_type |]) in
-      pair_to_coq_pair (constructor_pat, cake_exp) pat_type exp_type
+        mkApp (get_pat_constr "Pcon", [|constr_id; list_to_coq_list arg_pats (pat_type ()) |]) in
+      pair_to_coq_pair (constructor_pat, cake_exp) (pat_type ()) (exp_type ())
     in
     mkApp (get_exp_constr "EMat", [| translate_term env matched_term ;
-                                     list_to_coq_list (List.init (Array.length branches_as_functions) extract_branch) (prod_type pat_type exp_type)
+                                     list_to_coq_list (List.init (Array.length branches_as_functions) extract_branch) (prod_type (pat_type ()) (exp_type ()))
                                   |])
 
   | Ind ((name, ci), _) -> raise (UnsupportedFeature ("Cannot extract types as terms"))
@@ -163,7 +163,7 @@ and translate_constructor env constructor args =
                 List.filter (fun x -> not (is_type env x)) |>
                 List.map (translate_term env) in
 
-    mkApp (get_exp_constr "ECon", [| mkApp(get_option_constr "Some", [|ident_str_type; cake_id|]); list_to_coq_list args' exp_type|])
+    mkApp (get_exp_constr "ECon", [| mkApp(get_option_constr "Some", [|ident_str_type (); cake_id|]); list_to_coq_list args' (exp_type ())|])
 
   else
     let constructor = mkConstructU (constructor_name, EInstance.empty) in
@@ -181,10 +181,10 @@ and translate_application env func args =
     | [x] -> translate_term env x
     | [a;f] ->
       mkApp (get_exp_constr "EApp",
-             [| get_op_constr "Opapp"; list_to_coq_list [translate_term env f; translate_term env a] exp_type |])
+             [| get_op_constr "Opapp"; list_to_coq_list [translate_term env f; translate_term env a] (exp_type ()) |])
     | x::l ->
       mkApp (get_exp_constr "EApp",
-             [| get_op_constr "Opapp"; list_to_coq_list [opapp_helper env l; translate_term env x] exp_type |])
+             [| get_op_constr "Opapp"; list_to_coq_list [opapp_helper env l; translate_term env x] (exp_type ()) |])
     | _ -> assert false
   in
 
@@ -203,12 +203,13 @@ and translate_fixpoint env fix_name fix_body let_body =
     let env' = push_rel (LocalAssum (name,typ)) env in
     if isSort sigma typ then translate_fixpoint env' fix_name body let_body
     else
+      let string_type = string_type () in
       let fixpoint_name = str_to_coq_str (name_to_str fix_name.binder_name) in
       let var_name = str_to_coq_str (name_to_str name.binder_name) in
       let fixpoint_body = translate_term env' body in
       let fix_var_names = pair_to_coq_pair (fixpoint_name, var_name) string_type string_type in
-      let fixpoint_triple = pair_to_coq_pair (fix_var_names, fixpoint_body) (prod_type string_type string_type) (exp_type) in
-      let fixpoint_triple_list = list_to_coq_list [fixpoint_triple] (prod_type (prod_type string_type string_type) exp_type) in
+      let fixpoint_triple = pair_to_coq_pair (fix_var_names, fixpoint_body) (prod_type string_type string_type) (exp_type ()) in
+      let fixpoint_triple_list = list_to_coq_list [fixpoint_triple] (prod_type (prod_type string_type string_type) (exp_type ())) in
       let in_var =
         match let_body with
         | None -> mkApp (get_exp_constr "EVar", [| ident_of_str (name_to_str fix_name.binder_name) |])
@@ -243,6 +244,7 @@ let rec translate_ast_t env typ =
 
   | App (hd, args) ->
     if isInd sigma hd then
+      let string_type = string_type () in
       let ((mut_name,type_index),_) = destInd sigma hd in
       let mut_body = Environ.lookup_mind mut_name env in
       let one_body = mut_body.mind_packets.(type_index) in
@@ -251,15 +253,15 @@ let rec translate_ast_t env typ =
 
       let type_args = Array.map (translate_ast_t env) args in
 
-      mkApp (get_ast_t_constr "Atapp", [| type_args |> Array.to_list |> (fun x -> list_to_coq_list x ast_t_type);
+      mkApp (get_ast_t_constr "Atapp", [| type_args |> Array.to_list |> (fun x -> list_to_coq_list x (ast_t_type ()));
                                           head |])
     else if isConst sigma hd then
       let (const_name,_) = destConst sigma hd in
       let head_str = NameManip.id_of_constant const_name |> Names.Id.to_string in
-      let head = mkApp(get_ident_constr "Short", [| string_type; string_type; str_to_coq_str head_str |]) in
+      let head = mkApp(get_ident_constr "Short", [| string_type (); string_type (); str_to_coq_str head_str |]) in
       let type_args = Array.map (translate_ast_t env) args in
 
-      mkApp (get_ast_t_constr "Atapp", [| type_args |> Array.to_list |> (fun x -> list_to_coq_list x ast_t_type);
+      mkApp (get_ast_t_constr "Atapp", [| type_args |> Array.to_list |> (fun x -> list_to_coq_list x (ast_t_type ()));
                                           head |])
 
     else
@@ -269,13 +271,13 @@ let rec translate_ast_t env typ =
     let mut_body = Environ.lookup_mind mut_name env in
     let one_body = mut_body.mind_packets.(type_index) in
     let type_name = one_body.mind_typename |> Names.Id.to_string in
-    let short_name = mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str type_name |]) in
-    mkApp (get_ast_t_constr "Atapp", [| list_to_coq_list [] ast_t_type; short_name |])
+    let short_name = mkApp (get_ident_constr "Short", [| string_type (); string_type (); str_to_coq_str type_name |]) in
+    mkApp (get_ast_t_constr "Atapp", [| list_to_coq_list [] (ast_t_type ()); short_name |])
 
   | Const (constname,_) ->
     let const_str = NameManip.id_of_constant constname |> Names.Id.to_string in
-    let short_name = mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str const_str |]) in
-    mkApp (get_ast_t_constr "Atapp", [| list_to_coq_list [] ast_t_type; short_name |])
+    let short_name = mkApp (get_ident_constr "Short", [| string_type (); string_type (); str_to_coq_str const_str |]) in
+    mkApp (get_ast_t_constr "Atapp", [| list_to_coq_list [] (ast_t_type ()); short_name |])
 
   | Prod (_,_,_) ->
     raise (UnsupportedFeature "Functions as arguments to constructors is unsupported")
@@ -294,8 +296,8 @@ let translate_constructor_declaration env name ctxt nb_args =
       1 args_list
   in
   let args_list = List.rev args_list in
-  pair_to_coq_pair (coq_name, list_to_coq_list args_list ast_t_type)
-    string_type (list_type ast_t_type)
+  pair_to_coq_pair (coq_name, list_to_coq_list args_list (ast_t_type ()))
+    (string_type ()) (list_type (ast_t_type ()))
 
 let translate_one_body env one_body =
   let open Names in
@@ -311,7 +313,7 @@ let translate_one_body env one_body =
       name_arg_nb
   in
 
-  let list_cake_cons = list_to_coq_list constructors (prod_type string_type (list_type ast_t_type)) in
+  let list_cake_cons = list_to_coq_list constructors (prod_type (string_type ()) (list_type (ast_t_type ()))) in
 
   let typename = one_body.mind_typename |> Id.to_string |> fix_type_name |> str_to_coq_str in
 
@@ -327,12 +329,12 @@ let translate_one_body env one_body =
                          params
   in
 
-  let params = list_to_coq_list (List.rev params) string_type in
+  let params = list_to_coq_list (List.rev params) (string_type ()) in
 
-  let params_name_pair = pair_to_coq_pair (params, typename) (list_type string_type) string_type in
+  let params_name_pair = pair_to_coq_pair (params, typename) (list_type (string_type ())) (string_type ()) in
   pair_to_coq_pair (params_name_pair, list_cake_cons)
-    (prod_type (list_type string_type) string_type)
-    (list_type (prod_type string_type (list_type ast_t_type)))
+    (prod_type (list_type (string_type ())) (string_type ()))
+    (list_type (prod_type (string_type ()) (list_type (ast_t_type ()))))
 
 let translate_type_definition env (mut_body : Declarations.mutual_inductive_body) =
   let open Declarations in
@@ -340,10 +342,10 @@ let translate_type_definition env (mut_body : Declarations.mutual_inductive_body
   if List.length mut_rec_types > 1 then raise (UnsupportedFeature "Mutually recursive types not supported")
   else
     list_to_coq_list mut_rec_types (prod_type
-                                      (prod_type (list_type string_type) string_type)
-                                      (list_type (prod_type string_type (list_type ast_t_type))))
+                                      (prod_type (list_type (string_type ())) (string_type ()))
+                                      (list_type (prod_type (string_type ()) (list_type (ast_t_type ())))))
 
-let unknown_loc = list_to_coq_list [] nat_type
+let unknown_loc = list_to_coq_list [] (nat_type ())
 
 let translate_let_declaration env name term =
   let def_name = mkApp (get_pat_constr "Pvar", [| name |> Names.Constant.label |> Names.Label.to_string |> str_to_coq_str |]) in
@@ -359,7 +361,7 @@ let translate_type_synonym env name term typ =
   let (context,end_term) = EConstr.decompose_lambda_n_decls sigma i normalized_term in
   let vars = NameManip.context_to_var_names context |>
              List.map str_to_coq_str |>
-             (fun x -> list_to_coq_list x string_type)
+             (fun x -> list_to_coq_list x (string_type ()))
   in
   let ast = translate_ast_t (EConstr.push_rel_context context env) end_term in
   mkApp (get_dec_cons "Dtabbrev", [| unknown_loc; vars; name; ast |])
@@ -434,11 +436,14 @@ let translate_and_print r =
 
 (*   | VarRef _ -> Feedback.msg_info (Pp.str "Not a constant at all: is a Section variable") *)
 
-let current_program = ref (list_to_coq_list [] dec_type)
-let reset_current_program () = current_program := list_to_coq_list [] dec_type
+
+(* let _ = try let _ = Nametab.locate_module (Libnames.qualid_of_string "CakeSem.CakeAST") in print_endline "found" with Not_found -> print_endline "not found" *)
+let current_program = Summary.ref ~stage:Interp ~name:"current_program" (list_to_coq_list [] (dec_type ()))
+
+let reset_current_program () = current_program := list_to_coq_list [] (dec_type ())
 
 let add_dec_to_current_program dec =
-  current_program := mkApp(get_list_constr "cons", [| dec_type; dec; !current_program |])
+  current_program := mkApp(get_list_constr "cons", [| dec_type (); dec; !current_program |])
 
 let print_current_program () =
   print_econstr !current_program
@@ -449,7 +454,7 @@ let translate_and_add_to_global_environment r =
       let name = String.concat "" ["cake_"; Libnames.string_of_qualid r] in
       let _ = Declare.declare_definition
           ~info:(Declare.Info.make ())
-          ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string name) ~typ:(Some dec_type) ())
+          ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string name) ~typ:(Some (dec_type ())) ())
           ~opaque:false
           ~body:dec
           Evd.empty
@@ -459,54 +464,3 @@ let translate_and_add_to_global_environment r =
     with
     | UnsupportedFeature error -> Feedback.msg_info (Pp.str error)
   end
-
-(* let translate_and_add_to_global_environment r = *)
-(*   let glob_ref = locate_global_ref r in *)
-(*   let global_env = Global.env () in *)
-(*   match glob_ref with *)
-(*   | ConstRef const_name -> *)
-(*     let const_body = Environ.lookup_constant const_name global_env in *)
-(*     begin *)
-(*       match const_body.const_body with *)
-(*       | Def const -> *)
-(*         begin *)
-(*           try let cake_declaration = translate_let_declaration global_env const_name (EConstr.of_constr const) in *)
-(*             let dec_type = get_type "CakeSem.CakeAST" "dec" in *)
-(*             let name = String.concat "" ["cake_"; const_name |> Names.Constant.label |> Names.Label.to_string  ] in *)
-(*             let _ = Declare.declare_definition *)
-(*                                ~info:(Declare.Info.make ()) *)
-(*                                ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string name) ~typ:(Some dec_type) ()) *)
-(*                                ~opaque:false *)
-(*                                ~body:cake_declaration *)
-(*                                Evd.empty *)
-(*             in *)
-(*             let _ = add_dec_to_current_program cake_declaration in *)
-(*             () *)
-
-(*           with *)
-(*           | UnsupportedFeature error -> Feedback.msg_info (Pp.str error) *)
-(*         end *)
-(*       | _ -> Feedback.msg_info (Pp.str "Not a defined constant") *)
-(*     end *)
-
-(*   | IndRef (name,_) | ConstructRef ((name,_),_) -> *)
-(*     begin *)
-(*       try *)
-(*         let mut_body = Environ.lookup_mind name global_env in *)
-(*         let cake_type_def = translate_type_declaration global_env mut_body in *)
-(*         let dec_type = get_type "CakeSem.CakeAST" "dec" in *)
-(*         let name = String.concat "" ["cake_"; name |> Names.MutInd.label |> Names.Label.to_string  ] in *)
-(*         let _ = Declare.declare_definition *)
-(*             ~info:(Declare.Info.make ()) *)
-(*             ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string name) ~typ:(Some dec_type) ()) *)
-(*             ~opaque:false *)
-(*             ~body:cake_type_def *)
-(*             Evd.empty *)
-(*         in *)
-(*         let _ = add_dec_to_current_program cake_type_def in *)
-(*         () *)
-(*       with *)
-(*       | UnsupportedFeature error -> Feedback.msg_info (Pp.str error) *)
-(*     end *)
-
-(*   | VarRef _ -> Feedback.msg_info (Pp.str "Not a constant at all: is a Section variable") *)

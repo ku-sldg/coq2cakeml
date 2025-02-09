@@ -3,10 +3,10 @@ DECLARE PLUGIN "coq2cakeml.plugin"
 {
   open Stdarg
   open Extraction
-open InvGen
-open CertificateGen
-open CaseRuleGenerator
-open ConstructorRuleGenerator
+  open InvGen
+  open CertificateGen
+  open CaseRuleGenerator
+  open ConstructorRuleGenerator
 }
 
 (* { *)
@@ -26,9 +26,12 @@ VERNAC COMMAND EXTEND CakeTranslate CLASSIFIED AS QUERY
 (* Extraction in the Coq toplevel *)
 | [ "PrintTranslation" global(x) ] -> { translate_and_print x }
 | [ "PrintInvariant" global(x) ] -> { print_refinement_invariant x }
-| [ "GenerateInvariant" global(x) ] -> { generate_invariant_and_update_environment x }
 | [ "PrintProgram" ] -> { print_current_program () }
+END
+
+VERNAC COMMAND EXTEND CakeTranslate2 CLASSIFIED AS SIDEFF
 | [ "ENV_INIT" ] -> { init_cake_env () }
+| [ "GenerateInvariant" global(x) ] -> { generate_invariant_and_update_environment x }
 END
 
 {
