@@ -1,13 +1,6 @@
-(* Start: Need to be here because I do not handle the Synterp stuff correctly yet *)
-Require Import Strings.String.
-Require Import CakeSem.CakeAST.
-Require Import CakeSem.SemanticsAux.
-Require Import CakeSem.Namespace.
 Require Import CakeMLExtraction.RefineInv.
-Require Import EvaluateDecsWrapper.
-(* End: Need to be here because I do not handle the Synterp stuff correctly yet *)
+Require Import Equations.Prop.Equations.
 
-Require Import CakeMLExtraction.Loader.
 Require Import Lists.List.
 Import ListNotations.
 Require Import Strings.String.
