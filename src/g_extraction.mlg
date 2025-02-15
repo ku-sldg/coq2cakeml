@@ -30,7 +30,7 @@ VERNAC COMMAND EXTEND CakeTranslate CLASSIFIED AS QUERY
 END
 
 VERNAC COMMAND EXTEND CakeTranslate2 CLASSIFIED AS SIDEFF
-| [ "ENV_INIT" ] -> { init_cake_env () }
+| [ "BeginProgram" ] -> { init_cake_env () }
 | [ "GenerateInvariant" global(x) ] -> { generate_invariant_and_update_environment x }
 END
 

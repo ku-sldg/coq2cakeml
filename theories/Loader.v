@@ -1,11 +1,11 @@
-Require Import CakeSem.SemanticsAux.
-Require Import CakeSem.Namespace.
-Require Import CakeSem.Evaluate.
-Require Import RefineInv.
-Require Import EvaluateDecsWrapper.
-Require Import EnvWrangling.
-Declare ML Module "coq2cakeml:coq2cakeml.plugin".
-
-Require Export RefineInv.
+Require Export CakeSem.CakeAST.
+Require Export CakeSem.Namespace.
+Require Export CakeSem.SemanticsAux.
+Require Export CakeSem.Evaluate.
+Require Export CakeSem.EvaluateTheory.
+Require Export CakeMLExtraction.RefineInv.
 Require Export EvaluateDecsWrapper.
+Require Export EnvWrangling.
 Require Export Equations.Prop.Equations.
+From CakeMLExtraction Require Export Constants.
+Declare ML Module "coq2cakeml:coq2cakeml.plugin".

@@ -1,13 +1,12 @@
-(* Start: Need to be here because I do not handle the Synterp stuff correctly yet *)
-Require Import Strings.String.
-Require Import CakeSem.CakeAST.
-Require Import CakeSem.SemanticsAux.
-Require Import CakeSem.Namespace.
-Require Import CakeMLExtraction.RefineInv.
-Require Import EvaluateDecsWrapper.
-(* End: Need to be here because I do not handle the Synterp stuff correctly yet *)
-
-Require Export Loader. (* I'd like this to be Coq2CakeML *)
+(* Start: Need to be here because the plugin attempts to immediately build terms made up of types in these files *)
+(* Require Import CakeSem.CakeAST. *)
+(* Require Import CakeSem.SemanticsAux. *)
+(* Require Import CakeSem.Namespace. *)
+(* Require Import CakeMLExtraction.RefineInv. *)
+(* Require Import EvaluateDecsWrapper. *)
+(* End : fixing requires figuring out how to encapsulate these into loader or programatically load them *)
+Require Import Constants.
+From CakeMLExtraction Require Import Loader. (* I'd like this to be Coq2CakeML *)
 
 Require Import CakeSem.Namespace.
 Require Import CakeSem.CakeAST.
@@ -24,9 +23,22 @@ Open Scope string_scope.
 
 Require Import Tactics.
 
-Require Import Extraction.
+(* Axiom Test  *)
+BeginProgram.
+GenerateInvariant nat.
 
-ENV_INIT.
+Axiom axio_plus : nat -> nat -> nat.
+GenerateCertificate axio_plus. Admitted.
+GenerateDeclaration axio_plus. Admitted.
+
+(* All EVAL says is that there exists SOME value that is fulfills the *)
+(* refinement invariant, but not what that value is. *)
+
+Axiom axio_poly : forall A : Type, A -> A.
+GenerateCertificate axio_poly. Admitted.
+GenerateDeclaration axio_poly. Admitted.
+
+(* map examples *)
 GenerateInvariant list.
 
 GenerateConstLemma nil.
@@ -95,9 +107,6 @@ Proof.
     final_solve.
 Qed.
 
-GenerateInvariant nat.
-
-
 Fixpoint my_map (A B : Type) (f : A -> B) l :=
   match l with
   | [] => []
@@ -163,6 +172,16 @@ Proof.
            apply INV_vs'.
 Qed.
 
+GenerateDeclaration my_map.
+Proof.
+  unfold DECL.
+  exists 0.
+  simp evaluate_decs; simpl.
+  simp eval_or_match; simpl.
+  simp pmatch; simpl.
+  reflexivity.
+Qed.
+
 (* (* Playin *) *)
 
 Theorem EVAL_EVar_Recclosure2
@@ -216,7 +235,7 @@ Qed.
 
 (*   (* Done Playin *) *)
 
-Require Import CakeSem.Evaluate.
+(* Require Import CakeSem.Evaluate. *)
 GenerateCertificate map.
 Obligations.
 intros A AINV B BINV.
@@ -259,6 +278,63 @@ apply EVAL_EFun.
               unfold EQ. split; inv H0; try reflexivity; try assumption.
 Qed.
 
+Theorem diff_map_defs_EVAL :
+  forall (A : Type) (A_INV : A -> val -> Prop) (B : Type) (B_INV : B -> val -> Prop),
+    EVAL cake_env5
+      (EFun "f"
+         (ELetrec
+            [("map", "l",
+               EMat (EVar (Short "l"))
+                 [(Pcon (Some (Short "Nil")) [], ECon (Some (Short "Nil")) []);
+                  (Pcon (Some (Short "Cons")) [Pvar "a"; Pvar "t"],
+                    ECon (Some (Short "Cons"))
+                      [EApp Opapp [EVar (Short "f"); EVar (Short "a")];
+                       EApp Opapp [EVar (Short "map"); EVar (Short "t")]])])]
+            (EVar (Short "map"))))
+      (FUNC (FUNC A_INV B_INV) (FUNC (list_INV A A_INV) (list_INV B B_INV))
+         (my_map A B)).
+Proof.
+intros A AINV B BINV.
+apply EVAL_EFun.
+  intros f v H.
+  apply EVAL_remove_EQ.
+  - constructor. constructor.
+  - intros x.
+    apply EVAL_ELetrec.
+    induction x as [| a x'].
+    * intros u H'.
+      apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(map f l)) [].
+      + reflexivity.
+      + good_cons_env_solve. (* if this fails check the passed in environment argument to the theorem *)
+      + apply EVAL_EVar with u; [reflexivity|assumption].
+      + intro.
+        eapply EVAL_ECon_nil.
+        reflexivity.
+      + intros aa ab ac ad contra.
+        inv contra.
+    * intros u H'.
+      apply EVAL_EMat_list with A AINV [] (fun a l => (f a)::(my_map A B f l)) (a::x'). (* change here : map ==> my_map A B*)
+      + reflexivity.
+      + good_cons_env_solve.
+      + eapply EVAL_EVar; try reflexivity; try assumption.
+      + intro contra. inv contra.
+      + intros.
+        eapply EVAL_ECon_cons.
+        -- reflexivity.
+        -- eapply EVAL_EApp_Opapp.
+           ** apply EVAL_EVar with v;try reflexivity; try assumption.
+              apply H.
+           ** eapply EVAL_EVar ; try reflexivity; try assumption.
+        -- eapply EVAL_EApp_Opapp.
+           ** eapply EVAL_EVar_Recclosure.
+              ++ intros.
+                 reflexivity.
+              ++ apply IHx'.
+           ** eapply EVAL_EVar; try reflexivity; try assumption.
+              unfold EQ. split; inv H0; try reflexivity; try assumption.
+Qed.
+
+
 GenerateDeclaration map.
 Proof.
   unfold DECL.
@@ -269,12 +345,14 @@ Proof.
   reflexivity.
 Qed.
 
-PrintProgram.
+(* PrintProgram. *)
 
 FinishProgram "map".
 Obligations.
 simpl;
   repeat (next; try reflexivity).
+apply DECL_indiv_axio_plus_cert_thm.
+apply DECL_indiv_axio_poly_cert_thm.
 apply DECL_indiv_map_cert_thm.
 reflexivity.
 Qed.

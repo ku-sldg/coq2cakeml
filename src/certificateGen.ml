@@ -1,5 +1,4 @@
 (* Certificate Theorem Generation *)
-
 open Extraction
 open EConstr
 open InvGen
@@ -8,7 +7,7 @@ open TermGen
 
 let eval_dec decs env =
   let eval_decs_wrapper = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "EvaluateDecsWrapper.eval_decs_wrapper") in
-  mkApp (mkConstU (eval_decs_wrapper, EInstance.empty), [| mk_init_state (); env; TermGen.list_to_coq_list decs (TypeGen.dec_type ()) |])
+  mkApp (mkConstU (eval_decs_wrapper, EInstance.empty), [| mk_init_state (); env; TermGen.list_to_coq_list decs TypeGen.dec_type |])
 
 let create_certificate_theorem env cake_env term =
   let sigma = Evd.from_env env in
@@ -22,23 +21,50 @@ let create_certificate_theorem env cake_env term =
   let prods' = List.map (fun (x,y) -> Context.Rel.Declaration.LocalAssum (x,y)) prods in
   it_mkProd_or_LetIn (mkEVAL cake_env exp decl') prods'
 
+(* explodes on a polymorphic type *)
+let create_axiom_cert_thm env cake_env axiom_name axiom_type =
+  let sigma = Evd.from_env env in
+  let inv = invariant_from_type env axiom_type in
+  let exp = translate_axiom_exp env axiom_type in
+  let _prods, _bottom_inv = decompose_prod sigma inv in
+  let rels = Array.init (List.length _prods / 2) (fun x -> mkRel ((x + 1) * 2))
+             |> Array.to_list |> List.rev |> Array.of_list in
+  let inv' = mkApp (_bottom_inv, [|mkApp (mkConstU (axiom_name, EInstance.empty), rels)|]) in
+  let prods' = List.map (fun (x,y) -> Context.Rel.Declaration.LocalAssum (x,y)) _prods in
+  it_mkProd_or_LetIn (mkEVAL cake_env exp inv') prods'
+
 (* Definition DECL (st : state ST) (env : sem_env val) (decs : list dec) (st' : state ST) (env' : sem_env val) *)
 let create_decl_indiv_certificate_theorem start_st start_env dec final_st final_env =
   let decl_constant = mkConstU (Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "DECL"), EInstance.empty) in
   mkApp (decl_constant,
          [| start_st; start_env;
-            list_to_coq_list [dec] (TypeGen.dec_type ());
+            list_to_coq_list [dec] TypeGen.dec_type;
             final_st; final_env |])
 
 (* hack cause otherwise synterp fails *)
 let init_cake_env () =
   let _ = Declare.declare_definition
       ~info:(Declare.Info.make ())
-      ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string !curr_env_name) ~typ:(Some (TypeGen.sem_env_type (TypeGen.val_type ()))) ())
+      ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string !curr_env_name) ~typ:(Some (TypeGen.sem_env_type TypeGen.val_type)) ())
       ~opaque:false
       ~body:(mk_empty_sem_env ())
       (Evd.from_env (Global.env ()))
   in ()
+
+(* Dangerous function to add *)
+let create_val_axiom name =
+  let hopefully_unique_name = Nameops.add_suffix name "_arb_v" in
+  let _ = ComAssumption.declare_axiom
+            ~coe:NoCoercion
+            ~local:ImportDefaultBehavior
+            ~kind:Definitional
+            ~univs:(Evd.univ_entry ~poly:false Evd.empty)
+            ~impargs:[]
+            ~inline:NoInline
+            ~name:hopefully_unique_name
+            (EConstr.to_constr (Evd.empty) TypeGen.val_type)
+  in ()
+
 
 let mk_updated_environment ref cake_env_constant =
   let glob_ref = locate_global_ref ref in
@@ -61,15 +87,15 @@ let mk_updated_environment ref cake_env_constant =
     in
 
     let cake_args = Array.map int_to_coq_nat cons_num_args in
-    let nat_stamp_pairs = Array.map2 (fun x y -> pair_to_coq_pair (x,y) (nat_type ()) (stamp_type ()))
+    let nat_stamp_pairs = Array.map2 (fun x y -> pair_to_coq_pair (x,y) nat_type stamp_type)
         cake_args stamps
     in
 
-    let cs = Array.map2 (fun x y -> pair_to_coq_pair (x,y) (string_type ()) (prod_type (nat_type ()) (stamp_type ())))
+    let cs = Array.map2 (fun x y -> pair_to_coq_pair (x,y) string_type (prod_type nat_type stamp_type))
         cake_cons_names nat_stamp_pairs |>
              Array.to_list |>
              List.rev |>
-             (fun x -> list_to_coq_list x (prod_type (string_type ()) (prod_type (nat_type ()) (stamp_type ()))))
+             (fun x -> list_to_coq_list x (prod_type string_type (prod_type nat_type stamp_type)))
     in
     mk_write_c_list cs cake_env_constant
 
@@ -84,13 +110,19 @@ let mk_updated_environment ref cake_env_constant =
                       cakeml_variable_string |>
                       str_to_coq_str
       in
-      let ebody =
+      let cake_val =
         match body.const_body with
-        | Def ebody -> ebody
+        | Def ebody ->
+          let e = translate_term global_env (EConstr.of_constr ebody) in
+          mkApp (get_constant "cake.wrapped_eval", [| e; cake_env_constant |])
+        | Undef _ ->
+          let _ = create_val_axiom @@ id_of_constant cname in
+          let new_ax =
+            Smartlocate.global_constant_with_alias (Libnames.qualid_of_string @@ Names.Id.to_string @@ Nameops.add_suffix (id_of_constant cname) "_arb_v" ) in
+          mkConstU (new_ax ,EInstance.empty)
+          (* raise (GenEx "update_environment: term to translate must be Defined and/or Transparent") *)
         | _ -> raise (GenEx "update_environment: term to translate must be Defined and/or Transparent")
       in
-      let e = translate_term global_env (EConstr.of_constr ebody) in
-      let cake_val = mkApp (get_constant "EvaluateDecsWrapper" "wrapped_eval", [|e; cake_env_constant|]) in
       mk_write_v cake_name cake_val cake_env_constant
 
   | _ -> raise (GenEx "update_environment: not supported")
@@ -98,7 +130,7 @@ let mk_updated_environment ref cake_env_constant =
 let update_environment ref =
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
-  let new_env = mk_updated_environment ref (get_constant "" !curr_env_name) in
+  let new_env = mk_updated_environment ref (get_dyn_constant "" !curr_env_name) in (* need something different here *)
 
   prev_env_name := !curr_env_name;
   curr_env_name := String.concat "" ["cake_env"; string_of_int !next_env_num];
@@ -106,7 +138,7 @@ let update_environment ref =
 
   let _ = Declare.declare_definition
             ~info:(Declare.Info.make ())
-            ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string !curr_env_name) ~typ:(Some (TypeGen.sem_env_type (TypeGen.val_type ()))) ())
+            ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string !curr_env_name) ~typ:(Some (TypeGen.sem_env_type TypeGen.val_type)) ())
             ~opaque:false
             ~body:new_env
             sigma
@@ -143,8 +175,8 @@ let generate_eval_certificate_theorem ~pm ~ref =
     let certificate = begin
       match x.const_body with
       | Def const ->
-        create_certificate_theorem global_env (get_constant "" !prev_env_name) (EConstr.of_constr const)
-      | Undef _ -> raise (UnsupportedFeature "Axioms not supported")
+        create_certificate_theorem global_env (get_dyn_constant "" !prev_env_name) (EConstr.of_constr const)
+      | Undef _ -> create_axiom_cert_thm global_env (get_dyn_constant "" !prev_env_name) const_name (EConstr.of_constr x.const_type)
       | _ -> raise (UnsupportedFeature "not doing this part right now")
     end in
     let certificate_theorem_name =
@@ -183,30 +215,30 @@ let generate_val_decl_certificate_theorem ~pm ~ref =
 
   let open TypeGen in
 
-  let st = mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [| nat_type (); mk_init_state (); int_to_coq_nat !curr_st_num|]) in
-  let st' = mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [| nat_type (); mk_init_state (); int_to_coq_nat !curr_st_num|]) in
-  let env = get_constant "" !prev_env_name in
+  let st = mkApp (get_constant "cake.state_update_next_type_stamp", [| nat_type ; mk_init_state (); int_to_coq_nat !curr_st_num|]) in
+  let st' = mkApp (get_constant "cake.state_update_next_type_stamp", [| nat_type ; mk_init_state (); int_to_coq_nat !curr_st_num|]) in
+  let env = get_dyn_constant "" !prev_env_name in (* need diff thing here *)
   let open TypeGen in
   let default_val =
     mkApp (get_val_constr "Litv",
            [| mkApp (get_lit_constr "StrLit", [| str_to_coq_str "FAILURE: hd default" |]) |]) in
   let default_name =
-    mkApp (get_ident_constr "Short", [| string_type (); string_type (); str_to_coq_str "default"|]) in
+    mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str "default"|]) in
   let default_prod =
-    pair_to_coq_pair (default_name, default_val) (ident_type (string_type ()) (string_type ())) (val_type ()) in
+    pair_to_coq_pair (default_name, default_val) (ident_type string_type string_type) val_type in
   let env' =
-    mkApp (get_constructor "SemanticsAux" "Build_sem_env",
-           [| val_type ()
+    mkApp (get_constructor "cake.build_sem_env",
+           [| val_type
             ; if is_type_synonym ref then
-                mkApp (get_constant "Namespace" "nsEmpty", [| string_type (); string_type (); val_type () |])
+                mkApp (get_constant "cake.nsEmpty", [| string_type; string_type; val_type |])
               else
-                list_to_coq_list [mkApp (get_constant "Lists.List" "hd",
-                                         [| prod_type (ident_type (string_type ()) (string_type ())) (val_type ());
+                list_to_coq_list [mkApp (get_constant "core.list.hd",
+                                         [| prod_type (ident_type string_type string_type) val_type;
                                             default_prod;
-                                            mkApp (get_constant "SemanticsAux" "sev",
-                                                   [| val_type (); get_constant "" !curr_env_name |]) |])]
-                  (prod_type (ident_str_type ()) (val_type ()))
-            ; mkApp (get_constant "Namespace" "nsEmpty", [| string_type (); string_type (); prod_type (nat_type ()) (stamp_type ()) |]) |])
+                                            mkApp (get_constant "cake.sev",
+                                                   [| val_type; get_dyn_constant "" !curr_env_name |]) |])] (* new thing here *)
+                  (prod_type (ident_str_type ()) val_type)
+            ; mkApp (get_constant "cake.nsEmpty", [| string_type; string_type; prod_type nat_type stamp_type |]) |])
       in
   let cake_dec = translate_declaration ref in
 
@@ -229,9 +261,9 @@ let generate_type_decl_certificate_theorem ~pm ~ref =
 
   let open TypeGen in
 
-  let st = mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [| nat_type (); mk_init_state (); int_to_coq_nat (!curr_st_num - 1)|]) in
-  let st' = mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [| nat_type (); mk_init_state (); int_to_coq_nat !curr_st_num|]) in
-  let env = get_constant "" !prev_env_name in
+  let st = mkApp (get_constant "cake.state_update_next_type_stamp", [| nat_type; mk_init_state (); int_to_coq_nat (!curr_st_num - 1)|]) in
+  let st' = mkApp (get_constant "cake.state_update_next_type_stamp", [| nat_type ; mk_init_state (); int_to_coq_nat !curr_st_num|]) in
+  let env = get_dyn_constant "" !prev_env_name in (* here *)
   let open TypeGen in
 
   let glob_ref = locate_global_ref ref in
@@ -243,14 +275,14 @@ let generate_type_decl_certificate_theorem ~pm ~ref =
   in
 
   let env' =
-    mkApp (get_constructor "SemanticsAux" "Build_sem_env",
-           [| val_type ()
-            ; mkApp (get_constant "Namespace" "nsEmpty", [| string_type (); string_type (); val_type () |])
-            ; mkApp (get_constant "Lists.List" "firstn",
-                     [| prod_type (ident_type (string_type ()) (string_type ())) (prod_type (nat_type ()) (stamp_type ()))
+    mkApp (get_constructor "cake.Build_sem_env",
+           [| val_type
+            ; mkApp (get_constant "cake.nsEmpty", [| string_type; string_type; val_type |])
+            ; mkApp (get_constant "core.list.firstn",
+                     [| prod_type (ident_type string_type string_type) (prod_type nat_type stamp_type)
                       ; int_to_coq_nat num_constrs
-                      ; mkApp (get_constant "SemanticsAux" "sec",
-                               [| val_type (); get_constant "" !curr_env_name |])
+                      ; mkApp (get_constant "cake.sec",
+                               [| val_type; get_dyn_constant "" !curr_env_name |]) (* here *)
                      |])
            |])
       in
@@ -276,23 +308,24 @@ let is_type_declaration ~ref =
   | _ -> false
 
 let generate_decl_certificate_theorem ~pm ~ref =
-  if is_type_declaration ~ref then
-    generate_type_decl_certificate_theorem ~pm ~ref
-  else
-    generate_val_decl_certificate_theorem ~pm ~ref
+  let glob_ref = locate_global_ref ref in
+  match glob_ref with
+  | IndRef _ -> generate_type_decl_certificate_theorem ~pm ~ref
+  | ConstRef _ -> generate_val_decl_certificate_theorem ~pm ~ref
+  | _ -> failwith "generate_decl_certificate_theorem: not an inductive or constant reference"
 
 
 let generate_program_decl_certificate_theorem ~pm prog_name =
   let global_env = Global.env () in
   let sigma = Evd.from_env global_env in
 
-  let decl_constant = get_constant "" "DECL" in
-  let rev_constant = get_constant "" "rev" in
+  let decl_constant = get_constant "cake.DECL" in
+  let rev_constant = get_constant "core.list.rev" in
   let certificate = mkApp (decl_constant,
                            [| mk_init_state (); mk_empty_sem_env ();
-                              mkApp (rev_constant, [| TypeGen.dec_type (); !current_program |]);
-                              mkApp (get_constant "SemanticsAux" "state_update_next_type_stamp", [|TypeGen.nat_type (); mk_init_state (); int_to_coq_nat !curr_st_num|]);
-                              get_constant "" !curr_env_name |])
+                              mkApp (rev_constant, [| TypeGen.dec_type; !current_program |]);
+                              mkApp (get_constant "cake.state_update_next_type_stamp", [|TypeGen.nat_type ; mk_init_state (); int_to_coq_nat !curr_st_num|]);
+                              get_dyn_constant "" !curr_env_name |]) (* *)
   in
 
   let certificate_theorem_name = Nameops.add_prefix "cake_prog_" (Nameops.add_suffix (Names.Id.of_string prog_name) "_certificate_thm") in

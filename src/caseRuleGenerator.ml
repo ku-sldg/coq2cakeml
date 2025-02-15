@@ -37,10 +37,10 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
   let result_type = mkType (Univ.Universe.make max_univ) in
 
   let refinement_invariant_names = List.map (fun name -> Nameops.add_suffix name "_INV") param_names in
-  let arb_inv_type = fun x -> mkArrowR x (mkArrowR (TypeGen.val_type ()) mkProp) in
+  let arb_inv_type = fun x -> mkArrowR x (mkArrowR TypeGen.val_type mkProp) in
   let refinement_invariant_types = List.map (fun name -> arb_inv_type (mkVar name)) param_names in
 
-  let result_invariant_name = Names.Id.of_string ("RESULT_INV") in
+  let result_invariant_name = Names.Id.of_string "RESULT_INV" in
   let result_invariant_type = arb_inv_type (mkVar result_name) in
 
   let mat = Id.of_string "mat" in
@@ -128,11 +128,11 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
     let pats = List.map (fun p -> mkApp (pvar, [|p|])) pat_strs in
     let option_name = mkApp (get_option_constr "Some", [| ident_str_type ();
-                                                          mkApp (get_ident_constr "Short", [| string_type (); string_type (); str_to_coq_str fixed_constructor_name |]) |])
+                                                          mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str fixed_constructor_name |]) |])
     in
-    let const_pat = mkApp (pcon, [| option_name; list_to_coq_list pats (pat_type ()) |]) in
+    let const_pat = mkApp (pcon, [| option_name; list_to_coq_list pats pat_type |]) in
 
-    pair_to_coq_pair (const_pat,c) (pat_type ()) (exp_type ())
+    pair_to_coq_pair (const_pat,c) pat_type exp_type
   in
 
   let trips = List.combine
@@ -142,7 +142,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   let cake_list_pats = TermGen.list_to_coq_list
       (List.map (fun ((n,ps),c) -> con_to_cake_pat n ps c) trips)
-      TypeGen.(prod_type (pat_type ()) (exp_type ()))
+      TypeGen.(prod_type pat_type exp_type)
   in
 
   let type_stamp = mkApp (TermGen.get_stamp_constr "TypeStamp", [| TermGen.str_to_coq_str ""; TermGen.int_to_coq_nat (!TermGen.curr_st_num - 1) |]) in (* hack to generate correct typstemp Note: will not work *)
@@ -223,12 +223,12 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
     let pat_val_pairs = List.combine pat_strs val_names in
 
-    let nsEmpty_sev = mkApp (mk_nsEmpty (), [| string_type (); string_type (); val_type ()|]) in
-    let nsEmpty_sec = mkApp (mk_nsEmpty (), [| string_type (); string_type (); prod_type (nat_type ()) (stamp_type ()) |]) in
-    let nsBind_list = List.fold_left (fun x (p,v) -> mkApp (TermGen.mk_nsBind (), [|string_type (); string_type (); val_type (); mkVar p; mkVar v; x|]) ) nsEmpty_sev pat_val_pairs in
+    let nsEmpty_sev = mkApp (mk_nsEmpty (), [| string_type; string_type; val_type |]) in
+    let nsEmpty_sec = mkApp (mk_nsEmpty (), [| string_type; string_type; prod_type nat_type stamp_type |]) in
+    let nsBind_list = List.fold_left (fun x (p,v) -> mkApp (TermGen.mk_nsBind (), [| string_type; string_type; val_type; mkVar p; mkVar v; x|]) ) nsEmpty_sev pat_val_pairs in
 
-    let updated_env = mkApp (mk_extend_dec_env (), [| val_type ();
-                                                   mkApp (mk_Build_sem_env (), [|val_type (); nsBind_list; nsEmpty_sec|]);
+    let updated_env = mkApp (mk_extend_dec_env (), [| val_type;
+                                                   mkApp (mk_Build_sem_env (), [| val_type; nsBind_list; nsEmpty_sec|]);
                                                    mkVar env_name |]) in
 
     let eval_prop = TermGen.mkEVAL updated_env (mkVar (List.nth c_names index)) (mkApp (mkVar result_invariant_name, [|mkApp (mkVar (List.nth b_names index), Array.of_list arg_names |> Array.map mkVar)|] )) in
@@ -239,7 +239,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
     let full_prop_rel = Vars.subst_vars sigma (List.append arg_names val_names |> List.rev) full_prop_var in
 
-    let full_prop_vals = it_mkProd full_prop_rel (List.map (fun n -> (annotR (Names.Name.Name n), val_type())) val_names |> List.rev) in
+    let full_prop_vals = it_mkProd full_prop_rel (List.map (fun n -> (annotR (Names.Name.Name n), val_type)) val_names |> List.rev) in
 
     it_mkProd full_prop_vals (List.map (fun (n,t) -> (annotR (Names.Name.Name n), t)) (List.combine arg_names arg_types) |> List.rev)
 
@@ -262,11 +262,11 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   (* All final substitutions *)
   let env_subst = Vars.subst_var sigma env_name final_prop in
-  let env_prod = mkProd (annotR (Name.Name env_name), TypeGen.sem_env_type (TypeGen.val_type ()), env_subst) in
+  let env_prod = mkProd (annotR (Name.Name env_name), TypeGen.sem_env_type TypeGen.val_type, env_subst) in
 
   let all_pats = List.flatten pat_str_names in
   let pat_str_subst = Vars.subst_vars sigma (List.rev all_pats) env_prod in
-  let pat_str_prod = it_mkProd pat_str_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) all_pats) (List.init (List.length all_pats) (fun _ -> TypeGen.string_type ())) |> List.rev) in
+  let pat_str_prod = it_mkProd pat_str_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) all_pats) (List.init (List.length all_pats) (fun _ -> TypeGen.string_type)) |> List.rev) in
 
   let orig_subst = Vars.subst_var sigma orig_name pat_str_prod in
   let orig_prod = mkProd (Name orig_name |> annotR, mkVar result_name, orig_subst) in
@@ -279,7 +279,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   let mat_c_names = mat::c_names in
   let c_mat_subst = Vars.subst_vars sigma (List.rev (mat_c_names)) b_prod in
-  let c_mat_prod = it_mkProd c_mat_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) mat_c_names) (List.init (List.length mat_c_names) (fun _ -> TypeGen.exp_type ())) |> List.rev) in
+  let c_mat_prod = it_mkProd c_mat_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) mat_c_names) (List.init (List.length mat_c_names) (fun _ -> TypeGen.exp_type )) |> List.rev) in
 
   let res_inv_subst = Vars.subst_var sigma result_invariant_name c_mat_prod in
   let res_inv_prod = mkProd (Name result_invariant_name |> annotR, result_invariant_type, res_inv_subst) in
