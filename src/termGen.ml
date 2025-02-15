@@ -121,7 +121,7 @@ let get_constant refname =
 let mk_nsBind () = get_constant "cake.nsbind"
 let mk_extend_dec_env () = get_constant "cake.extend_dec_env"
 let mk_nsEmpty () = get_constant "cake.nsEmpty"
-let mk_Build_sem_env () = get_constructor "cake.build_sem_env"
+let mk_Build_sem_env () = get_constructor "cake.Build_sem_env"
 
 let mk_good_cons_env () = get_constant "cake.good_cons_env"
 

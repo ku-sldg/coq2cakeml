@@ -227,7 +227,7 @@ let generate_val_decl_certificate_theorem ~pm ~ref =
   let default_prod =
     pair_to_coq_pair (default_name, default_val) (ident_type string_type string_type) val_type in
   let env' =
-    mkApp (get_constructor "cake.build_sem_env",
+    mkApp (get_constructor "cake.Build_sem_env",
            [| val_type
             ; if is_type_synonym ref then
                 mkApp (get_constant "cake.nsEmpty", [| string_type; string_type; val_type |])
