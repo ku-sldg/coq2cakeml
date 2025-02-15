@@ -59,7 +59,7 @@ Register SemanticsAux.TypeStamp as cake.typestamp.
 Register SemanticsAux.ExnStamp as cake.exnstamp.
 
 Register SemanticsAux.sem_env as cake.sem_env.
-Register SemanticsAux.Build_sem_env as cake.build_sem_env.
+Register SemanticsAux.Build_sem_env as cake.Build_sem_env.
 Register SemanticsAux.sec as cake.sec.
 Register SemanticsAux.sev as cake.sev.
 Register SemanticsAux.empty_sem_env as cake.empty_sem_env.
