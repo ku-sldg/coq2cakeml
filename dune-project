@@ -6,10 +6,10 @@
 (package
  (name coq2cakeml)
  (depends
-  (coq (= 8.17.1))
-  (coq-equations (= 1.3+8.17))
-  (dune (= 3.16.0))
-  (cakeml-semantics (= 0.1)))
+  coq
+  coq-equations
+  dune
+  cakeml-semantics)
  (synopsis "Coq plugin to synthesize CakeML from Coq")
  (description  "")
  (maintainers   "tjbarclay@ku.edu")

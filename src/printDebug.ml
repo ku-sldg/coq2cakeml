@@ -25,7 +25,7 @@ let rec print_constr_shape c =
   | Fix ((_,i),(_,_,cs))-> String.concat "" ["f\\. ("; print_constr_shape cs.(i); ")"]
   | CoFix _ -> "CoFix"
   | Proj _ -> "Proj"
-  | Int _ | Float _ | Array _ -> "Builtin"
+  | Int _ | Float _ | Array _ | String _ -> "Builtin"
 
 let rec print_econstr_shape c =
   match EConstr.kind (Evd.from_env (Global.env ())) c with
@@ -48,7 +48,7 @@ let rec print_econstr_shape c =
   | Fix ((_,i),(_,_,cs))-> String.concat "" ["f\\. ("; print_econstr_shape cs.(i); ")"]
   | CoFix _ -> "CoFix"
   | Proj _ -> "Proj"
-  | Int _ | Float _ | Array _ -> "Builtin"
+  | Int _ | Float _ | Array _ | String _ -> "Builtin"
 
 let print_constr ?(debruijn = false) ?(env = Global.env ()) e =
   let sigma = Evd.from_env env in
@@ -90,6 +90,7 @@ let print_arity arity =
       match relevance_of_sort sort with
       | Relevant -> "Relevant"
       | Irrelevant -> "Irrelevant"
+      | RelevanceVar _ -> "RelevanceVar"
     in
     print_endline ("RELEVANCE: " ^ sort_rel);
     print_endline ("THE SORT IS: " ^ sort_str);

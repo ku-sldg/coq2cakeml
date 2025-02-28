@@ -1030,3 +1030,154 @@ Proof.
     Unshelve.
     constructor.
 Qed.
+
+Theorem DECL_cons' : forall (st : state ST) (env : sem_env val) (d : dec) (ds : list dec)
+                       (st' st'' : state ST) (env' env'' env''' : sem_env val),
+    DECL st env [d] st' env' ->
+    DECL st' (extend_dec_env env' env) ds st'' env'' ->
+    env''' = (extend_dec_env env'' env') ->
+    DECL st env (d :: ds) st'' env'''.
+Proof.
+  intros.
+
+  subst.
+  eapply DECL_cons.
+  apply H.
+  apply H0.
+Qed.
+
+Theorem singular_rec_fun_equiv_DLet_DLetrec : forall f st env locs funname var e,
+    evaluate_decs f st env [Dlet locs (Pvar funname) (ELetrec [(funname,var,e)] (EVar (Short funname)))] =
+      evaluate_decs f st env [Dletrec locs [(funname,var,e)]].
+Proof.
+  intros.
+  simp evaluate_decs; simpl.
+  simp eval_or_match; simpl.
+  unfold build_rec_env; simpl.
+  unfold nsBind; simpl.
+  unfold nsLookup. simpl.
+  rewrite eqb_refl. simpl.
+  simp pmatch. simpl.
+  reflexivity.
+Qed.
+
+Theorem DECL_Dlet_Dletrec :
+  forall (st st' : state nat) (env env' : sem_env val) locs (funname var : tvarN) (e : exp),
+    DECL st env [Dlet locs (Pvar funname) (ELetrec [(funname, var, e)] (EVar (Short funname)))] st' env'
+    <->
+      DECL st env [Dletrec locs [(funname, var, e)]] st' env'.
+Proof.
+  intros.
+  unfold DECL.
+  split; intros; destruct H as [f H]; exists f.
+  rewrite <- singular_rec_fun_equiv_DLet_DLetrec; assumption.
+  rewrite singular_rec_fun_equiv_DLet_DLetrec; assumption.
+Qed.
+
+Theorem DECL_Dtabbrev : forall (st : state ST) (env : sem_env val) l tvs tn ast,
+    DECL st env [Dtabbrev l tvs tn ast] st empty_sem_env.
+Proof.
+  intros.
+  unfold DECL.
+  exists 0.
+  simp evaluate_decs. simpl.
+  reflexivity.
+Qed.
+
+(* Experimenting *)
+
+(* Given an EVAL theorem over some expression and environment, we know *)
+(* that there exists a unique state and environment that derives from *)
+(* putting that theorem into a declaration with the same environment the EVAL *)
+(* theorem relates to *)
+Theorem EVAL_entails_exists_DECL:
+  forall locs env e inv st name,
+    EVAL env e inv ->
+    exists! st' env',
+      DECL st env [Dlet locs (Pvar name) e] st' env'.
+Proof.
+  intros.
+  specialize (H st).
+  destruct H.
+  destruct H.
+  destruct H.
+  destruct H.
+  unfold unique.
+  econstructor.
+  econstructor.
+  econstructor.
+  split.
+  intros.
+  unfold DECL.
+  exists x0.
+  simp evaluate_decs; simpl.
+  unfold evaluate in H.
+  rewrite H.
+  simp pmatch.
+  reflexivity.
+  intros.
+  unfold DECL in H1.
+  destruct H1.
+  simp evaluate_decs in H1. simpl in *.
+  break_match.
+  unfold evaluate in H.
+  break_match.
+  simp pmatch in H1.
+  inv H1.
+  Search "fuel".
+  apply (use_maximum_fuel _ [x0; x2] _ _ _ _) in H, Heqp.
+  rewrite Heqp in H.
+  inv H.
+  reflexivity.
+  apply in_max_le. right. left. reflexivity.
+  apply in_max_le. left. reflexivity.
+  inv H1.
+  intros.
+  destruct H1.
+  destruct H1.
+  unfold DECL in H1.
+  destruct H1.
+  simp evaluate_decs in H1. simpl in *.
+  break_match.
+  unfold evaluate in H.
+  break_match.
+  simp pmatch in H1.
+  inv H1.
+  apply (use_maximum_fuel _ [x0; x3] _ _ _ _) in H, Heqp.
+  rewrite Heqp in H.
+  inv H.
+  reflexivity.
+  apply in_max_le. right. left. reflexivity.
+  apply in_max_le. left. reflexivity.
+  inv H1.
+Qed.
+
+Theorem DECL_entails_lookupability :
+  forall st env locs name e st' env',
+  DECL st env [Dlet locs (Pvar name) e] st' env' ->
+  exists! v, nsLookup ident_string_beq (Short name) (sev env') = v.
+Proof.
+  intros.
+  unfold DECL in H.
+  destruct H.
+  unfold unique.
+  simp evaluate_decs in H; simpl in H.
+  break_match.
+  break_match.
+  - simp pmatch in H. simpl in *.
+    inv H.
+    simpl.
+    econstructor.
+    split.
+    + simpl.
+      unfold nsLookup.
+      simpl.
+      rewrite eqb_refl.
+      reflexivity.
+    + intros.
+      rewrite <- H0.
+      unfold nsLookup. simpl.
+      rewrite eqb_refl.
+      reflexivity.
+  - inv H.
+Qed.

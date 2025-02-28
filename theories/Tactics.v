@@ -1,5 +1,6 @@
-Require Import CakeMLExtraction.Loader.
 Require Import CakeMLExtraction.RefineInv.
+Require Import Equations.Prop.Equations.
+
 Require Import Lists.List.
 Import ListNotations.
 Require Import Strings.String.
@@ -37,7 +38,7 @@ Ltac handle_good_cons :=
       let Hstamp  := fresh "Hstamp" in
       destruct H1 as [con_name [ps [ty [Hps [HNo_Dup [Hlookup Hstamp]]]]]];
       inv Hps;
-      apply EqNat.beq_nat_true_stt in Hstamp;
+      apply PeanoNat.Nat.eqb_eq in Hstamp;
       subst
   | [good_cons : Forall ?P [] |- _ ] => clear good_cons
   end.
@@ -256,3 +257,17 @@ Ltac final_solve :=
         apply H
     end |
     assumption ].
+
+Ltac next :=
+  match goal with
+  | |- DECL ?st ?env [Dtype ?l ?td] ?st' ?env' => apply DECL_Dtype; try NoDup_solve
+  | |- DECL ?st ?env [Dtabbrev ?l ?tvs ?tn ?ast] ?st' ?env' => apply DECL_Dtabbrev
+  | |- DECL ?st ?env [Dlet ?l (Pvar ?n) (ELetrec [(?n,?v,?b)] (EVar (Short ?n)) ) ] ?st' ?env' =>
+      rewrite DECL_Dlet_Dletrec;
+      eapply DECL_Dletrec
+  | |- DECL ?st ?env [?d] ?st' ?env' => fail 1
+  | |- DECL ?st ?env (?d::?ds) ?st' ?env' => eapply DECL_cons'
+  end;
+  unfold state_update_next_type_stamp;
+  unfold extend_dec_env;
+  simpl.

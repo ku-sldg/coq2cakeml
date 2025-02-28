@@ -26,8 +26,13 @@ VERNAC COMMAND EXTEND CakeTranslate CLASSIFIED AS QUERY
 (* Extraction in the Coq toplevel *)
 | [ "PrintTranslation" global(x) ] -> { translate_and_print x }
 | [ "PrintInvariant" global(x) ] -> { print_refinement_invariant x }
+| [ "PrintProgram" ] -> { print_current_program () }
+END
+
+VERNAC COMMAND EXTEND CakeTranslate2 CLASSIFIED AS SIDEFF
+| [ "BeginProgram" ] -> { init_cake_env () }
 | [ "GenerateInvariant" global(x) ] -> { generate_invariant_and_update_environment x }
-  END
+END
 
 {
   let classify_generate_certificate x =

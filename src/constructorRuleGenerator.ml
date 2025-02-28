@@ -1,35 +1,3 @@
-(* general theorem is: *)
-(* Theorem EVAL_ECon : *)
-(*   forall (Q : val -> Prop) (es : list exp) (ps : list ((val -> Prop) * exp)) stmp name env, *)
-(*     (map snd ps) = es -> *)
-(*     nsLookup ident_string_beq name (sec env) = Some (length ps, stmp) -> *)
-(*     Forall (fun '(P,x) => EVAL env x P) ps -> *)
-(*     (forall vals, *)
-(*         Forall2 (fun '(P,_) v => P v) ps vals -> Q (Conv (Some stmp) vals)) -> *)
-(*     EVAL env (ECon (Some name) es) Q. *)
-
-(* if written by hand to list we'd generate: *)
-(* Theorem EVAL_ECon_list_nil : *)
-(*   forall A A_INV env, *)
-(*     nsLookup ident_string_beq (Short "Nil") (sec env) = Some (0, TypeStamp "Nil" 0) -> *)
-(*     EVAL env (ECon (Some (Short "Nil")) []) (list_INV A A_INV []). *)
-
-(* and: *)
-
-(* Theorem EVAL_ECon_list_cons : *)
-(*   forall env PARAM0 PARAM0_INV (e1 e2 : exp) a l, *)
-(*     nsLookup ident_string_beq (Short "Cons") (sec env) = Some (2, TypeStamp "Cons" 0) -> *)
-(*     EVAL env e1 (PARAM0_INV a) -> *)
-(*     EVAL env e2 (list_INV PARAM0 PARAM0_INV l') -> *)
-(*     EVAL env (ECon (Some (Short "Cons")) [e1; e2]) (list_INV A A_INV (a::l)). *)
-
-(* components: *)
-(*   * name *)
-(*   * argument invariants *)
-
-(* one_body -> create a series of EVAL_ECon_constructor_names  *)
-(* constructor -> EVAL_ECon_constructor_name added to environment *)
-
 open InvGen
 open EConstr
 open TermGen
@@ -55,6 +23,7 @@ let rec drop n l =
       | _::l' -> drop (n-1) l'
     end
 
+(* Some genius can tell me what combo of map and fold this really is *)
 let rec tjs_special_map facb facc c l =
   match l with
   | [] -> []
@@ -98,42 +67,42 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
   let final_inv = InvGen.invariant_from_type (EConstr.push_rel_context (EConstr.of_rel_context args) env) (EConstr.of_constr final_typ) in
   let param_names = List.map (fun x -> get_name x |> NameManip.id_of_name |> mkVar) params in
   let cons_term = if List.length args > 0 then
-      mkApp (mkConstruct cname, Array.of_list (List.concat [param_names; arg_vars]))
+      mkApp (mkConstructU (cname, EInstance.empty), Array.of_list (List.concat [param_names; arg_vars]))
     else
-      mkConstruct cname
+      mkConstructU (cname, EInstance.empty)
   in
   let cake_const_name = NameManip.cakeml_constructor_string (Names.Id.to_string (one_ind_body.mind_consnames.(index)))  in
   let cake_cons_term = mkApp (get_exp_constr "ECon",
-                              [| option_to_coq_option (Some (ident_of_str cake_const_name)) ident_str_type;
-                                 list_to_coq_list arg_exps exp_type |])
+                              [| option_to_coq_option (Some (ident_of_str cake_const_name)) (ident_str_type ());
+                                 list_to_coq_list arg_exps (exp_type ) |])
   in
 
   let conclusion = mkEVAL (mkVar (Names.Id.of_string "env")) cake_cons_term (mkApp (final_inv, [| cons_term |])) in
 
   (* nsLookup ident_string_beq (Short "Cons") (sec env) = Some (2, TypeStamp "Cons" 0) -> *)
 
-  let left_half = mkApp (get_constant "Namespace" "nsLookup",
+  let left_half = mkApp (get_constant "cake.nsLookup",
                               [| string_type; string_type; prod_type nat_type stamp_type;
-                                 get_constant "" "ident_string_beq";
+                                 get_constant "cake.ident_string_beq";
                                  ident_of_str cake_const_name;
-                                 mkApp (get_constant "" "sec", [| val_type; mkVar (Names.Id.of_string "env") |]) |])
+                                 mkApp (get_constant "cake.sec", [| val_type; mkVar (Names.Id.of_string "env") |]) |])
   in
 
-  let right_half = option_to_coq_option (Some (pair_to_coq_pair (int_to_coq_nat (List.length args_no_params), mkApp (get_constructor "SemanticsAux" "TypeStamp",
+  let right_half = option_to_coq_option (Some (pair_to_coq_pair (int_to_coq_nat (List.length args_no_params), mkApp (get_constructor "cake.typestamp",
                                                                                           [| str_to_coq_str cake_const_name;
                                                                                              int_to_coq_nat (!curr_st_num - 1) |]))
                                                  nat_type stamp_type))
                      (prod_type nat_type stamp_type)
   in
 
-  let nsLookup_assum = mk_eq (option_type (prod_type nat_type stamp_type)) left_half right_half in
+  let nsLookup_assum = mk_eq (option_type (prod_type nat_type stamp_type )) left_half right_half in
 
 
   (* now we put them all together *)
 
   let final_prop = List.fold_right mkArrowR (nsLookup_assum::arg_EVALs) conclusion in
 
-  (* add foralls and substitue *)
+  (* add foralls and substitute *)
 
   (*   forall env PARAM0 PARAM0_INV (e1 e2 : exp) a l, *)
   (* forall A ... Z A_INV ... Z_INV (or A A_INV ... Z Z_INV) env e1 .. en arg1 ... argn *)
@@ -155,16 +124,16 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
       subst_and_add_prod sigma l' (mkProd (get_annot x, Context.Rel.Declaration.get_type x, Vars.subst_var sigma id term))
   in
 
-  let arb_inv_type = fun x -> mkArrowR x (mkArrowR (val_type) mkProp) in
+  let arb_inv_type = fun x -> mkArrowR x (mkArrowR val_type mkProp) in
   (* param *)
   let prod_params = params in
   (* param_inv  *)
-  let prod_param_invs = List.map (fun x -> Context.Rel.Declaration.LocalAssum (NameManip.name_string_map (get_name x) (fun s -> String.concat "" [s; "_INV"]) |> Context.annotR,
+  let prod_param_invs = List.map (fun x -> Context.Rel.Declaration.LocalAssum (NameManip.name_string_map (get_name x) (fun s -> String.concat "" [s; "_INV"]) |> annotR,
                                                                                arb_inv_type (mkVar (get_name x |> NameManip.id_of_name)))) params in
   (* env *)
-  let prod_env = [Context.Rel.Declaration.LocalAssum (Context.annotR (Names.Name (Names.Id.of_string "env")), sem_env_type val_type)] in
+  let prod_env = [Context.Rel.Declaration.LocalAssum (annotR (Names.Name (Names.Id.of_string "env")), sem_env_type val_type)] in
   (* exps *)
-  let prod_exps = List.map2 (fun x y -> Context.Rel.Declaration.LocalAssum (Names.Name x |> Context.annotR, y)) arg_exp_names (List.init (List.length arg_exp_names) (fun _ -> exp_type)) in
+  let prod_exps = List.map2 (fun x y -> Context.Rel.Declaration.LocalAssum (Names.Name x |> annotR, y)) arg_exp_names (List.init (List.length arg_exp_names) (fun _ -> exp_type)) in
 
   (* args *)
   let rec replace_rels_with_vars env typ =
@@ -187,7 +156,6 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
 
   let final_theorem = subst_and_add_prod (Evd.from_env env) (List.concat [prod_params; prod_param_invs; prod_env; prod_exps; prod_args] |> List.rev) final_prop in
 
-  PrintDebug.print_econstr final_theorem;
   final_theorem
 
 let generate_constructor_lemma ~pm ~ref =
@@ -206,43 +174,4 @@ let generate_constructor_lemma ~pm ~ref =
     let cinfo' = CInfo.make ~name:lemma_name ~typ:lemma () in
     let info = Info.make () in
     pm, Declare.Proof.start ~info ~cinfo:cinfo' sigma'
-(* | IndRef (mutname, index) -> *)
   | _ -> Feedback.msg_info (Pp.str "Not an inductive type reference"); raise (GenEx "Messed up")
-
-
-(* Theorem EVAL_ECon : *)
-(*   forall (Q : val -> Prop) (es : list exp) (ps : list ((val -> Prop) * exp)) stmp name env, *)
-(*     (map snd ps) = es -> *)
-(*     nsLookup ident_string_beq name (sec env) = Some (length ps, stmp) -> *)
-(*     Forall (fun '(P,x) => EVAL env x P) ps -> *)
-(*     (forall vals, *)
-(*         Forall2 (fun '(P,_) v => P v) ps vals -> Q (Conv (Some stmp) vals)) -> *)
-(*     EVAL env (ECon (Some name) es) Q. *)
-
-(* let mk_econ_lemma_from_general_econ_lemma env one_ind_body cname (\* I hate these arguments *\) nparams = *)
-(*   let (typename,index) = cname in *)
-(*   let index = index - 1 in *)
-(*   let (args,final_typ) = one_ind_body.mind_nf_lc.(index) in *)
-
-(*   let args' = List.rev args |> List.map EConstr.of_rel_decl in (\* I don't like this I don't know why its set up like this *\) *)
-(*   let params = take nparams args' in *)
-(*   let args_no_params = drop nparams args' in *)
-
-(*   let env' = push_rel_context params env in *)
-(*   let arg_invs = *)
-(*     tjs_special_map *)
-(*       (fun d e -> invariant_from_type e (get_type d)) *)
-(*       (fun d e -> push_rel (Namegen.name_assumption e (Evd.from_env e) d) e) env' args_no_params *)
-(*   in *)
-
-(*   let arg_names = *)
-(*     tjs_special_map *)
-(*       (fun d e -> Namegen.name_assumption e (Evd.from_env e) d) *)
-(*       (fun d e -> push_rel (Namegen.name_assumption e (Evd.from_env e) d) e) env' args_no_params *)
-(*   in *)
-
-(*   let (env'', arg_names_types) =  Namegen.make_all_rel_context_name_different env' (Evd.from_env env') arg_names in *)
-
-(*   let arg_vars = List.map (fun x -> mkVar (NameManip.id_of_name (get_name x))) arg_names_types in *)
-(*   let arg_exp_names = List.init (List.length arg_vars) (fun i -> Names.Id.of_string (String.concat "" ["e"; string_of_int i])) in *)
-(*   let arg_exps = List.map mkVar arg_exp_names in *)
