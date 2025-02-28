@@ -1,10 +1,3 @@
-(* Start: Need to be here because the plugin attempts to immediately build terms made up of types in these files *)
-(* Require Import CakeSem.CakeAST. *)
-(* Require Import CakeSem.SemanticsAux. *)
-(* Require Import CakeSem.Namespace. *)
-(* Require Import CakeMLExtraction.RefineInv. *)
-(* Require Import EvaluateDecsWrapper. *)
-(* End : fixing requires figuring out how to encapsulate these into loader or programatically load them *)
 Require Import Constants.
 From CakeMLExtraction Require Import Loader. (* I'd like this to be Coq2CakeML *)
 
