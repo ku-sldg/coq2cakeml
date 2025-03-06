@@ -38,6 +38,12 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
   let params = take nparams args' in
   let args_no_params = drop nparams args' in
 
+  let exp_type = exp_type () in
+  let string_type = string_type () in
+  let nat_type = nat_type () in
+  let stamp_type = stamp_type () in
+  let val_type = val_type () in
+
   let env' = push_rel_context params env in
   let arg_invs =
     tjs_special_map
@@ -72,9 +78,9 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
       mkConstructU (cname, EInstance.empty)
   in
   let cake_const_name = NameManip.cakeml_constructor_string (Names.Id.to_string (one_ind_body.mind_consnames.(index)))  in
-  let cake_cons_term = mkApp (get_exp_constr "ECon",
+  let cake_cons_term = mkApp (mk_ECon (),
                               [| option_to_coq_option (Some (ident_of_str cake_const_name)) (ident_str_type ());
-                                 list_to_coq_list arg_exps (exp_type ) |])
+                                 list_to_coq_list arg_exps exp_type |])
   in
 
   let conclusion = mkEVAL (mkVar (Names.Id.of_string "env")) cake_cons_term (mkApp (final_inv, [| cons_term |])) in
@@ -95,7 +101,7 @@ let mk_econ_lemma_from_constructor env one_ind_body cname (* I hate these argume
                      (prod_type nat_type stamp_type)
   in
 
-  let nsLookup_assum = mk_eq (option_type (prod_type nat_type stamp_type )) left_half right_half in
+  let nsLookup_assum = eq_type (option_type (prod_type nat_type stamp_type )) left_half right_half in
 
 
   (* now we put them all together *)

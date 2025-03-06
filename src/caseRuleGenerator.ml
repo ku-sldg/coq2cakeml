@@ -23,6 +23,15 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
   let sigma = Evd.from_env env in
   let one_body = mut_body.mind_packets.(0) in
 
+  let open TermGen in
+  let open TypeGen in
+
+  let string_type = string_type () in
+  let pat_type = pat_type () in
+  let exp_type = exp_type () in
+  let val_type = val_type () in
+  let nat_type = nat_type () in
+  let stamp_type = stamp_type () in
 
   let open Context.Rel.Declaration in
   let open Names in
@@ -37,7 +46,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
   let result_type = mkType (Univ.Universe.make max_univ) in
 
   let refinement_invariant_names = List.map (fun name -> Nameops.add_suffix name "_INV") param_names in
-  let arb_inv_type = fun x -> mkArrowR x (mkArrowR TypeGen.val_type mkProp) in
+  let arb_inv_type = fun x -> mkArrowR x (mkArrowR val_type mkProp) in
   let refinement_invariant_types = List.map (fun name -> arb_inv_type (mkVar name)) param_names in
 
   let result_invariant_name = Names.Id.of_string "RESULT_INV" in
@@ -120,15 +129,14 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
   (*                 (Pcon (Some (Short "CakeConsNamer") [Pvar pat_str_1; .. Pvar pat_str_m]), c_r) ] *)
   (*               env (TypeStamp "" ??) -> *)
   let con_to_cake_pat constructor_name pat_strs c =
-    let open TermGen in
-    let open TypeGen in
-    let pcon = get_pat_constr "Pcon" in
-    let pvar = get_pat_constr "Pvar" in
+
+    let pcon = mk_PCon () in
+    let pvar = mk_Pvar () in
     let fixed_constructor_name = Id.to_string constructor_name |> String.capitalize_ascii in
 
     let pats = List.map (fun p -> mkApp (pvar, [|p|])) pat_strs in
-    let option_name = mkApp (get_option_constr "Some", [| ident_str_type ();
-                                                          mkApp (get_ident_constr "Short", [| string_type; string_type; str_to_coq_str fixed_constructor_name |]) |])
+    let option_name = mkApp (mk_Some (), [| ident_str_type ();
+                                                          mkApp (mk_Short (), [| string_type; string_type; str_to_coq_str fixed_constructor_name |]) |])
     in
     let const_pat = mkApp (pcon, [| option_name; list_to_coq_list pats pat_type |]) in
 
@@ -142,14 +150,14 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   let cake_list_pats = TermGen.list_to_coq_list
       (List.map (fun ((n,ps),c) -> con_to_cake_pat n ps c) trips)
-      TypeGen.(prod_type pat_type exp_type)
+      (prod_type pat_type exp_type)
   in
 
-  let type_stamp = mkApp (TermGen.get_stamp_constr "TypeStamp", [| TermGen.str_to_coq_str ""; TermGen.int_to_coq_nat (!TermGen.curr_st_num - 1) |]) in (* hack to generate correct typstemp Note: will not work *)
+  let type_stamp = mkApp (mk_TypeStamp (), [| str_to_coq_str ""; int_to_coq_nat (!curr_st_num - 1) |]) in (* hack to generate correct typstemp Note: will not work *)
   let good_cons_env_prop = mkApp (TermGen.mk_good_cons_env (), [| cake_list_pats; mkVar env_name; type_stamp |]) in
 
   let eval_term = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string "RefineInv.EVAL") in
-  let mkEVAL cake_env exp inv = mkApp(mkConstU (eval_term, EInstance.empty),[|cake_env; exp; inv|]) in
+  let mkEVAL cake_env exp inv = mkApp (mkConstU (eval_term, EInstance.empty), [|cake_env; exp; inv|]) in
 
   let inv_id = Nameops.add_suffix (Environ.lookup_mind (fst inductive_name) (Global.env ())).mind_packets.(0).mind_typename "_INV" in
   let inv_const =
@@ -216,9 +224,6 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
     let applied_invs = List.map (fun (inv,(a,v)) -> mkApp (inv, [|mkVar a; mkVar v|])) (List.combine arg_invs (List.combine arg_names val_names)) in
 
-    let open TermGen in
-    let open TypeGen in
-
     let pat_strs = List.nth pat_str_names index in
 
     let pat_val_pairs = List.combine pat_strs val_names in
@@ -254,7 +259,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
   (*                       (Pcon (Some (Short "CakeConsNamer") [Pvar pat_str_1; .. Pvar pat_str_m]), c_r) ] *)
   (*             (res_INV orig) *)
 
-  let conc_prop = mkEVAL (mkVar env_name) (mkApp (TermGen.get_exp_constr "EMat", [| mkVar mat; cake_list_pats |])) (mkApp (mkVar result_invariant_name, [|mkVar orig_name|])) in
+  let conc_prop = mkEVAL (mkVar env_name) (mkApp (mk_EMat (), [| mkVar mat; cake_list_pats |])) (mkApp (mkVar result_invariant_name, [|mkVar orig_name|])) in
 
   (* Putting all the propositions together *)
 
@@ -262,11 +267,11 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   (* All final substitutions *)
   let env_subst = Vars.subst_var sigma env_name final_prop in
-  let env_prod = mkProd (annotR (Name.Name env_name), TypeGen.sem_env_type TypeGen.val_type, env_subst) in
+  let env_prod = mkProd (annotR (Name.Name env_name), sem_env_type val_type, env_subst) in
 
   let all_pats = List.flatten pat_str_names in
   let pat_str_subst = Vars.subst_vars sigma (List.rev all_pats) env_prod in
-  let pat_str_prod = it_mkProd pat_str_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) all_pats) (List.init (List.length all_pats) (fun _ -> TypeGen.string_type)) |> List.rev) in
+  let pat_str_prod = it_mkProd pat_str_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) all_pats) (List.init (List.length all_pats) (fun _ -> string_type)) |> List.rev) in
 
   let orig_subst = Vars.subst_var sigma orig_name pat_str_prod in
   let orig_prod = mkProd (Name orig_name |> annotR, mkVar result_name, orig_subst) in
@@ -279,7 +284,7 @@ let mk_case_theorem env (inductive_name : Names.inductive) =
 
   let mat_c_names = mat::c_names in
   let c_mat_subst = Vars.subst_vars sigma (List.rev (mat_c_names)) b_prod in
-  let c_mat_prod = it_mkProd c_mat_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) mat_c_names) (List.init (List.length mat_c_names) (fun _ -> TypeGen.exp_type )) |> List.rev) in
+  let c_mat_prod = it_mkProd c_mat_subst (List.combine (List.map (fun id -> Name.Name id |> annotR) mat_c_names) (List.init (List.length mat_c_names) (fun _ -> exp_type )) |> List.rev) in
 
   let res_inv_subst = Vars.subst_var sigma result_invariant_name c_mat_prod in
   let res_inv_prod = mkProd (Name result_invariant_name |> annotR, result_invariant_type, res_inv_subst) in

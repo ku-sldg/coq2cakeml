@@ -72,7 +72,7 @@ Register Namespace.ident as cake.ident.
 Register Namespace.Short as cake.short.
 Register Namespace.Long as cake.long.
 Register Namespace.nsBind as cake.nsbind.
-Register Namespace.nsEmpty as cake.nsEmpty.
+Register Namespace.nsEmpty as cake.nsempty.
 Register Namespace.nsLookup as cake.nsLookup.
 
 Register RefineInv.good_cons_env as cake.good_cons_env.
@@ -89,3 +89,5 @@ Register EnvWrangling.write_c_list as cake.write_c_list.
 Register Evaluate.ident_string_beq as cake.ident_string_beq.
 
 Register EvaluateDecsWrapper.wrapped_eval as cake.wrapped_eval.
+Register EvaluateDecsWrapper.init_st as cake.init_st.
+Register EvaluateDecsWrapper.eval_decs_wrapper as cake.eval_decs_wrapper.

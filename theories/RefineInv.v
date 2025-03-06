@@ -789,7 +789,7 @@ Proof.
   do 3 eexists.
   simp eval_or_match; simpl.
   rewrite Hlookup; simpl.
-  rewrite map_length.
+  rewrite length_map.
   rewrite PeanoNat.Nat.eqb_refl; simpl.
   rewrite Hevalval; simpl.
   unfold ident_string_beq in Hlookup.
@@ -1124,7 +1124,6 @@ Proof.
   break_match.
   simp pmatch in H1.
   inv H1.
-  Search "fuel".
   apply (use_maximum_fuel _ [x0; x2] _ _ _ _) in H, Heqp.
   rewrite Heqp in H.
   inv H.
