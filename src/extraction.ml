@@ -490,7 +490,7 @@ let translate_and_print r =
 
 
 (* let _ = try let _ = Nametab.locate_module (Libnames.qualid_of_string "CakeSem.CakeAST") in print_endline "found" with Not_found -> print_endline "not found" *)
-let current_program = Summary.ref ~stage:Interp ~name:"current_program" (list_to_coq_list [] (dec_type ()))
+let current_program = Summary.ref ~stage:Interp ~name:"current_program" mkProp
 
 let reset_current_program () = current_program := list_to_coq_list [] (dec_type ())
 

@@ -36,8 +36,8 @@ let coq_snd sigma pair =
   args.(3)
 
 (* sem_env val*)
-let current_cake_env = Summary.ref ~stage:Interp ~name:"current_cake_env" (mk_empty_sem_env ())
+let current_cake_env = Summary.ref ~stage:Interp ~name:"current_cake_env" mkProp
 let reset_current_cake_env () = current_cake_env := mk_empty_sem_env ()
-let current_cake_st = Summary.ref ~stage:Interp ~name:"current_cake_st" (mk_init_st ())
+let current_cake_st = Summary.ref ~stage:Interp ~name:"current_cake_st" mkProp
 let reset_current_cake_st () = current_cake_st := mk_init_st ()
 let clear_semantic_environment () = reset_current_cake_env (); reset_current_cake_st ()

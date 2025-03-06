@@ -41,8 +41,14 @@ let create_decl_indiv_certificate_theorem start_st start_env dec final_st final_
             list_to_coq_list [dec] (TypeGen.dec_type ());
             final_st; final_env |])
 
-(* hack cause otherwise synterp fails *)
+(* Initialize OCaml references and Rocq declarations that will be carried across *)
+(* a translation session. This is my current solution to vs-coq problems. *)
 let init_cake_env () =
+  current_cake_env := mk_empty_sem_env ();
+  current_cake_st := mk_init_st ();
+  current_program := list_to_coq_list [] (TypeGen.dec_type ());
+  curr_st_num := 0;
+
   let _ = Declare.declare_definition
       ~info:(Declare.Info.make ())
       ~cinfo:(Declare.CInfo.make ~name:(Names.Id.of_string !curr_env_name) ~typ:(Some (TypeGen.sem_env_type (TypeGen.val_type ()))) ())
@@ -55,16 +61,15 @@ let init_cake_env () =
 let create_val_axiom name =
   let hopefully_unique_name = Nameops.add_suffix name "_arb_v" in
   let _ = ComAssumption.declare_axiom
-            ~coe:NoCoercion
-            ~local:ImportDefaultBehavior
-            ~kind:Definitional
-            ~univs:(Evd.univ_entry ~poly:false Evd.empty)
-            ~impargs:[]
-            ~inline:NoInline
-            ~name:hopefully_unique_name
-            (EConstr.to_constr (Evd.empty) (TypeGen.val_type ()))
+      ~coe:NoCoercion
+      ~local:ImportDefaultBehavior
+      ~kind:Definitional
+      ~univs:(Evd.univ_entry ~poly:false Evd.empty)
+      ~impargs:[]
+      ~inline:NoInline
+      ~name:hopefully_unique_name
+      (EConstr.to_constr (Evd.empty) (TypeGen.val_type ()))
   in ()
-
 
 let mk_updated_environment ref cake_env_constant =
   let glob_ref = locate_global_ref ref in
