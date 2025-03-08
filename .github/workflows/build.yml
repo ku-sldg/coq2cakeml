@@ -37,6 +37,7 @@ jobs:
         with:
           path: cakeml-coq
           repository: ku-sldg/cakeml-coq
+          ref: coq-8.20
 
       - name: Build and Install CakeML semantics
         working-directory: ./cakeml-coq
@@ -49,6 +50,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: coq2cakeml
+          ref: main
 
       - name: Build and Install Coq2CakeML
         working-directory: ./coq2cakeml
