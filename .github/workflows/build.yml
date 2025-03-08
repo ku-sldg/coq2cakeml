@@ -1,0 +1,60 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      
+      - name: Install opam
+        run: sudo apt-get install opam 
+
+      - name: Install dependencies
+        run: |
+          opam init,
+          opam repo add coq-released https://coq.inria.fr/opam/released 
+          opam install -y dune coq-equations coq
+
+      - name: Checkout CakeML semantics
+        uses: actions/checkout@v4
+        with:
+          path: cakeml-coq
+          repository: ku-sldg/cakeml-coq
+
+      - name: Build and Install CakeML semantics
+        working-directory: ./cakeml-coq
+        run: | 
+          dune build,
+          opam install -w .
+
+      - name: Checkout coq2cakeml
+        uses: actions/checkout@v4
+        with:
+          path: coq2cakeml
+
+      - name: Build and Install Coq2CakeML
+        working-directory: ./coq2cakeml
+        run: | 
+          dune build,
+          opam install -w .
+      
+        
+    
+          
