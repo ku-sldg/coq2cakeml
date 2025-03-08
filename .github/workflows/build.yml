@@ -41,6 +41,7 @@ jobs:
       - name: Build and Install CakeML semantics
         working-directory: ./cakeml-coq
         run: | 
+          eval $(opam env)
           dune build
           opam install -w .
 
@@ -52,6 +53,7 @@ jobs:
       - name: Build and Install Coq2CakeML
         working-directory: ./coq2cakeml
         run: | 
+          eval $(opam env)
           dune build
           opam install -w .
       
