@@ -44,7 +44,7 @@ jobs:
         run: | 
           eval $(opam env)
           dune build
-          opam install -w .
+          opam install -y -w .
 
       - name: Checkout coq2cakeml
         uses: actions/checkout@v4
@@ -57,7 +57,7 @@ jobs:
         run: | 
           eval $(opam env)
           dune build
-          opam install -w .
+          opam install -y -w .
       
         
     
